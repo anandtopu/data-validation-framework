@@ -1,0 +1,48 @@
+site_name: dvf - Data Validation Framework
+site_description: Configuration-driven data and schema validation for data migrations and data engineering
+strict: true
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - content.code.copy
+  palette:
+    - scheme: default
+      toggle: { icon: material/brightness-7, name: Dark mode }
+    - scheme: slate
+      toggle: { icon: material/brightness-4, name: Light mode }
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Configuration: configuration.md
+  - Plugins: plugins.md
+  - API reference: reference.md
+  - Architecture decisions:
+      - adr/README.md
+      - adr/0001-record-architecture-decisions.md
+      - adr/0002-engine-strategy.md
+      - adr/0003-sqlglot-as-sql-layer.md
+      - adr/0004-canonical-result-model.md
+      - adr/0005-plugin-api.md
+      - adr/0006-configuration-model.md
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: false
+            show_root_heading: true
+            docstring_style: sphinx
+            members_order: source

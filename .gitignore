@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+src/dvf/_version.py
+
+# Virtual environments and tooling caches
+.venv/
+venv/
+.nox/
+.tox/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Documentation build
+site/
+
+# dvf runtime artifacts
+.dvf/
+reports/
+*.local.yaml
+*.local.yml
+*.local.json
+*.local.toml
+*.local.properties
+*.local.ini
+.env
+.env.*
+!.env.example
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

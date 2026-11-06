@@ -1,0 +1,130 @@
+# yaml-language-server: $schema=../../schemas/config.schema.json
+#
+# SAP ECC (HANA database) to Snowflake finance migration.
+# Shows secrets, variables, profiles (see dvf.uat.yaml), SAP normalizers, pattern tables,
+# waivers, notifications, and a project-local plugin check.
+#
+#   dvf validate-config examples/sap_to_snowflake/dvf.yaml
+#   dvf validate-config examples/sap_to_snowflake/dvf.yaml --profile uat
+#   dvf config show examples/sap_to_snowflake/dvf.yaml --profile uat
+version: 1
+
+project:
+  name: ecc-to-snowflake-finance
+  description: SAP ECC 6.0 to Snowflake finance data migration
+  metadata:
+    release: R2
+    environment: ${env:DVF_ENVIRONMENT:-dev}
+
+vars:
+  sap_client: "100"
+  cutover_ts: ${env:CUTOVER_TS:-2026-11-01T00:00:00Z}
+
+plugins:
+  paths: [./plugins]
+
+defaults:
+  severity: error
+  sample_size: 50
+  privacy:
+    mask_pii: true
+    pii_columns: ["*NAME*", "*EMAIL*", "TELF*"]
+  normalization:
+    trim: rtrim               # SAP CHAR columns are blank-padded
+  execution:
+    max_parallel_tables: 4
+    max_queries_per_connection: 2
+
+connections:
+  sap_hana:
+    type: sap_hana
+    host: ${env:SAP_HANA_HOST:-sap-hana.dev.example.internal}
+    port: 30015
+    user: ${env:SAP_HANA_USER:-DVF_READER}
+    password: ${secret:env:SAP_HANA_PASSWORD}
+    schema: SAPSR3
+    client: ${var:sap_client}
+  snowflake:
+    type: snowflake
+    account: ${env:SF_ACCOUNT:-example-account}
+    user: ${env:SF_USER:-DVF_READER}
+    authenticator: externalbrowser
+    warehouse: QA_WH
+    database: ANALYTICS
+    role: QA_READONLY
+
+suites:
+  - name: finance_master_data
+    source: sap_hana
+    target: snowflake
+    tags: [master-data, nightly]
+    defaults:
+      comparison:
+        strategies: [row_count, aggregate, hash_bucket]
+        buckets: 1024
+    tables:
+      - name: customers
+        source:
+          table: KNA1
+          filter: "MANDT = '${var:sap_client}' AND LOEVM = ''"
+        target:
+          table: CORE.CUSTOMER
+          as_of: ${var:cutover_ts}
+        keys:
+          - { source: KUNNR, target: CUSTOMER_ID, normalize: [sap_alpha] }
+        columns:
+          exclude: [MANDT]
+          mappings:
+            - { source: NAME1, target: CUSTOMER_NAME }
+            - { source: ERDAT, target: CREATED_DATE, normalize: [sap_dats] }
+            - { source_expr: "TRIM(STRAS) || ' ' || TRIM(ORT01)", target: FULL_ADDRESS }
+        checks:
+          - { type: not_null, columns: [CUSTOMER_ID, CUSTOMER_NAME] }
+          - { type: unique, columns: [CUSTOMER_ID] }
+          - { type: regex, column: COUNTRY_CODE, pattern: "^[A-Z]{2}$", mostly: 0.999 }
+          - type: referential_integrity
+            column: COMPANY_CODE
+            parent: { table: CORE.COMPANY, column: COMPANY_CODE }
+          - type: custom_sql
+            name: no_future_created_dates
+            sql: "SELECT * FROM {table} WHERE CREATED_DATE > CURRENT_DATE"
+            severity: warning
+            details: { rule_owner: finance-ba, requirement: FIN-REQ-112 }
+          - { type: acme.vat_number_valid, column: VAT_ID, country_column: COUNTRY_CODE }
+
+      - name: gl_balances
+        source:
+          query: >
+            SELECT BUKRS, GJAHR, RPMAX, RACCT, SUM(HSL) AS AMOUNT
+            FROM SAPSR3.FAGLFLEXT WHERE RCLNT = '${var:sap_client}'
+            GROUP BY BUKRS, GJAHR, RPMAX, RACCT
+        target: { table: FINANCE.GL_BALANCE }
+        keys: [BUKRS, GJAHR, RPMAX, RACCT]
+        comparison:
+          strategies: [row_count, aggregate]
+          group_by: [BUKRS, GJAHR]
+          tolerance: { numeric_abs: 0.005 }
+
+      - pattern: { source: "SAPSR3.ZFI_*", target: "FINANCE.ZFI_*" }
+        keys: auto
+        comparison:
+          strategies: [row_count, aggregate]
+
+waivers:
+  - check: finance_master_data.customers.compare.column_mismatch
+    column: CUSTOMER_NAME
+    reason: Names longer than 35 characters are truncated by design
+    ticket: CR-1042
+    approved_by: finance-data-owner
+    expires: 2027-06-30
+
+reports:
+  formats: [html, json, junit, excel]
+  branding:
+    title: Finance migration
+    primary_color: "#0B5FFF"
+
+notifications:
+  - type: teams
+    webhook: ${secret:env:TEAMS_WEBHOOK_URL}
+    on: [failed, error]

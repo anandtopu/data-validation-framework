@@ -1,0 +1,18 @@
+# Profile overlay applied with `--profile uat`. Mappings merge into dvf.yaml; lists replace.
+project:
+  metadata:
+    environment: uat
+
+connections:
+  sap_hana:
+    host: ${env:SAP_HANA_HOST:-sap-hana.uat.example.internal}
+  snowflake:
+    database: ANALYTICS_UAT
+
+defaults:
+  execution:
+    max_parallel_tables: 8
+
+reports:
+  branding:
+    title: Finance migration (UAT, mock cutover 3)

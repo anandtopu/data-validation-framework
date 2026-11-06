@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest a new check, connector, report, or capability
+labels: [enhancement, triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to validate or achieve, and what makes it hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How you would like it to work, including example configuration if you can.
+  - type: dropdown
+    id: plugin
+    attributes:
+      label: Could this be a plugin?
+      options: ["Yes, I could write it as a plugin", "No, it needs core changes", "Not sure"]

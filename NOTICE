@@ -1,0 +1,8 @@
+dvf - Data Validation Framework
+Copyright 2026 The dvf contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+dvf does not bundle proprietary database drivers or SDKs (for example SAP HANA
+client libraries or the SAP NetWeaver RFC SDK). Users who need them must obtain
+and install them under their own license terms.

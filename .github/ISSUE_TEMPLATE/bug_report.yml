@@ -1,0 +1,24 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug, triage]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Minimal configuration
+      description: A minimal config that reproduces the problem. Remove secrets and real data.
+      render: yaml
+  - type: textarea
+    id: version
+    attributes:
+      label: Output of `dvf version`
+      render: text
+    validations:
+      required: true

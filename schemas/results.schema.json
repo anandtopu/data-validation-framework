@@ -1,0 +1,1484 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "dvf results",
+  "x-dvf-results-schema-version": "1.0.0",
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "description": "A file produced alongside the report, such as a mismatch extract or repro SQL.",
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        }
+      },
+      "required": [
+        "kind",
+        "path"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "CanonicalType": {
+      "additionalProperties": false,
+      "description": "An engine-independent column type.\n\nAttributes that do not apply to a logical type stay ``None`` (or their default).\n``length=None`` on strings and binaries means unbounded; ``precision=None`` on decimals means\nthe engine's maximum or a floating decimal.",
+      "properties": {
+        "logical": {
+          "$ref": "#/$defs/LogicalType"
+        },
+        "bits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bits"
+        },
+        "unsigned": {
+          "default": false,
+          "title": "Unsigned",
+          "type": "boolean"
+        },
+        "precision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Precision"
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "length": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length"
+        },
+        "fixed_length": {
+          "default": false,
+          "title": "Fixed Length",
+          "type": "boolean"
+        },
+        "unicode": {
+          "default": true,
+          "title": "Unicode",
+          "type": "boolean"
+        },
+        "element": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "key": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "fields": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/StructField"
+          },
+          "title": "Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "logical"
+      ],
+      "title": "CanonicalType",
+      "type": "object"
+    },
+    "CheckResult": {
+      "additionalProperties": false,
+      "description": "The outcome of one check, comparison, or schema validation.",
+      "properties": {
+        "check_id": {
+          "title": "Check Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "dimension": {
+          "$ref": "#/$defs/Dimension"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Side"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner"
+        },
+        "columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        },
+        "observed": {
+          "default": null,
+          "title": "Observed"
+        },
+        "expected": {
+          "default": null,
+          "title": "Expected"
+        },
+        "unexpected_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unexpected Count"
+        },
+        "total_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Count"
+        },
+        "unexpected_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unexpected Pct"
+        },
+        "mostly": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mostly"
+        },
+        "samples": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SampleSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "column_mismatches": {
+          "items": {
+            "$ref": "#/$defs/ColumnMismatch"
+          },
+          "title": "Column Mismatches",
+          "type": "array"
+        },
+        "hints": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Hints",
+          "type": "array"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "queries": {
+          "items": {
+            "$ref": "#/$defs/QueryRecord"
+          },
+          "title": "Queries",
+          "type": "array"
+        },
+        "normalization": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Normalization",
+          "type": "array"
+        },
+        "engine": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Engine"
+        },
+        "partition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Partition"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "timing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimingBreakdown"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "waiver": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WaiverApplied"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "details": {
+          "additionalProperties": true,
+          "description": "Custom details from configuration or plugins.",
+          "title": "Details",
+          "type": "object"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "check_id",
+        "name",
+        "type",
+        "dimension",
+        "severity",
+        "status"
+      ],
+      "title": "CheckResult",
+      "type": "object"
+    },
+    "ColumnMismatch": {
+      "additionalProperties": false,
+      "description": "Per-column mismatch summary for a source-vs-target comparison.",
+      "properties": {
+        "column": {
+          "title": "Column",
+          "type": "string"
+        },
+        "source_column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Column"
+        },
+        "mismatch_count": {
+          "title": "Mismatch Count",
+          "type": "integer"
+        },
+        "mismatch_pct": {
+          "title": "Mismatch Pct",
+          "type": "number"
+        },
+        "classifications": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Mismatch class (for example 'whitespace_only') to number of rows.",
+          "title": "Classifications",
+          "type": "object"
+        },
+        "hints": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Hints",
+          "type": "array"
+        },
+        "samples": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SampleSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "column",
+        "mismatch_count",
+        "mismatch_pct"
+      ],
+      "title": "ColumnMismatch",
+      "type": "object"
+    },
+    "ColumnSchemaDiff": {
+      "additionalProperties": false,
+      "description": "One row of a schema comparison.",
+      "properties": {
+        "source_column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Column"
+        },
+        "target_column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Column"
+        },
+        "status": {
+          "description": "'matched', 'missing_in_target', or 'extra_in_target'.",
+          "title": "Status",
+          "type": "string"
+        },
+        "source_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "target_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_native_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Native Type"
+        },
+        "target_native_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Native Type"
+        },
+        "compatibility": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Compatibility"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "nullable_change": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nullable Change"
+        }
+      },
+      "required": [
+        "source_column",
+        "target_column",
+        "status"
+      ],
+      "title": "ColumnSchemaDiff",
+      "type": "object"
+    },
+    "Compatibility": {
+      "description": "How safely values of one type fit into another.",
+      "enum": [
+        "exact",
+        "compatible_widening",
+        "lossy",
+        "unknown",
+        "incompatible"
+      ],
+      "title": "Compatibility",
+      "type": "string"
+    },
+    "DatasetKind": {
+      "enum": [
+        "table",
+        "query",
+        "path",
+        "dataframe"
+      ],
+      "title": "DatasetKind",
+      "type": "string"
+    },
+    "DatasetPairResult": {
+      "additionalProperties": false,
+      "description": "Results for one table (or dataset pair) in a suite.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DatasetRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DatasetRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "row_counts": {
+          "$ref": "#/$defs/RowCounts"
+        },
+        "reconciliation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReconciliationSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema_diff": {
+          "items": {
+            "$ref": "#/$defs/ColumnSchemaDiff"
+          },
+          "title": "Schema Diff",
+          "type": "array"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/CheckResult"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "status"
+      ],
+      "title": "DatasetPairResult",
+      "type": "object"
+    },
+    "DatasetRef": {
+      "additionalProperties": false,
+      "description": "Where a dataset lives: a table, a query, a file path, or an in-process DataFrame.",
+      "properties": {
+        "connection": {
+          "title": "Connection",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/DatasetKind"
+        },
+        "name": {
+          "description": "Qualified table name, file path, query label, or DataFrame name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Query"
+        }
+      },
+      "required": [
+        "connection",
+        "kind",
+        "name"
+      ],
+      "title": "DatasetRef",
+      "type": "object"
+    },
+    "Dimension": {
+      "description": "Data quality dimension a check belongs to.",
+      "enum": [
+        "completeness",
+        "uniqueness",
+        "validity",
+        "consistency",
+        "referential_integrity",
+        "accuracy",
+        "timeliness",
+        "volume",
+        "distribution",
+        "schema",
+        "reconciliation",
+        "custom"
+      ],
+      "title": "Dimension",
+      "type": "string"
+    },
+    "ErrorInfo": {
+      "additionalProperties": false,
+      "description": "An execution error, with a remediation hint when one is known.",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "traceback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Traceback"
+        },
+        "hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hint"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "title": "ErrorInfo",
+      "type": "object"
+    },
+    "LogicalType": {
+      "description": "The logical kind of a value, independent of any engine.",
+      "enum": [
+        "BOOLEAN",
+        "INTEGER",
+        "DECIMAL",
+        "FLOAT",
+        "STRING",
+        "BINARY",
+        "DATE",
+        "TIME",
+        "TIMESTAMP",
+        "TIMESTAMP_TZ",
+        "INTERVAL",
+        "UUID",
+        "JSON",
+        "ARRAY",
+        "MAP",
+        "STRUCT",
+        "SPATIAL",
+        "UNKNOWN"
+      ],
+      "title": "LogicalType",
+      "type": "string"
+    },
+    "QueryRecord": {
+      "additionalProperties": false,
+      "description": "A query executed for a check, so failures can be reproduced exactly.",
+      "properties": {
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "dialect": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dialect"
+        },
+        "sql": {
+          "title": "Sql",
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "engine": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Engine"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "rows_returned": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows Returned"
+        }
+      },
+      "required": [
+        "side",
+        "sql"
+      ],
+      "title": "QueryRecord",
+      "type": "object"
+    },
+    "ReconciliationSummary": {
+      "additionalProperties": false,
+      "description": "Key-level reconciliation totals for a dataset pair.",
+      "properties": {
+        "matched": {
+          "default": 0,
+          "title": "Matched",
+          "type": "integer"
+        },
+        "mismatched": {
+          "default": 0,
+          "title": "Mismatched",
+          "type": "integer"
+        },
+        "missing_in_target": {
+          "default": 0,
+          "title": "Missing In Target",
+          "type": "integer"
+        },
+        "extra_in_target": {
+          "default": 0,
+          "title": "Extra In Target",
+          "type": "integer"
+        },
+        "duplicate_keys_source": {
+          "default": 0,
+          "title": "Duplicate Keys Source",
+          "type": "integer"
+        },
+        "duplicate_keys_target": {
+          "default": 0,
+          "title": "Duplicate Keys Target",
+          "type": "integer"
+        },
+        "null_keys_source": {
+          "default": 0,
+          "title": "Null Keys Source",
+          "type": "integer"
+        },
+        "null_keys_target": {
+          "default": 0,
+          "title": "Null Keys Target",
+          "type": "integer"
+        }
+      },
+      "title": "ReconciliationSummary",
+      "type": "object"
+    },
+    "RowCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
+        }
+      },
+      "title": "RowCounts",
+      "type": "object"
+    },
+    "RunEnvironment": {
+      "additionalProperties": false,
+      "description": "Everything needed to reproduce a run.",
+      "properties": {
+        "dvf_version": {
+          "title": "Dvf Version",
+          "type": "string"
+        },
+        "python_version": {
+          "title": "Python Version",
+          "type": "string"
+        },
+        "platform": {
+          "title": "Platform",
+          "type": "string"
+        },
+        "hostname": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hostname"
+        },
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Profile"
+        },
+        "git_sha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git Sha"
+        },
+        "config_files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Config Files",
+          "type": "array"
+        },
+        "config_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config Hash"
+        },
+        "cli_args": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Cli Args",
+          "type": "array"
+        },
+        "plugins": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Plugin distribution name to version.",
+          "title": "Plugins",
+          "type": "object"
+        },
+        "engines": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Engine or driver name to version.",
+          "title": "Engines",
+          "type": "object"
+        }
+      },
+      "required": [
+        "dvf_version",
+        "python_version",
+        "platform"
+      ],
+      "title": "RunEnvironment",
+      "type": "object"
+    },
+    "RunSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "checks_by_status": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/Status"
+          },
+          "title": "Checks By Status",
+          "type": "object"
+        },
+        "suites": {
+          "default": 0,
+          "title": "Suites",
+          "type": "integer"
+        },
+        "datasets": {
+          "default": 0,
+          "title": "Datasets",
+          "type": "integer"
+        },
+        "rows_compared": {
+          "default": 0,
+          "title": "Rows Compared",
+          "type": "integer"
+        },
+        "quality_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of evaluated checks that passed, from 0 to 100.",
+          "title": "Quality Score"
+        }
+      },
+      "title": "RunSummary",
+      "type": "object"
+    },
+    "SampleSet": {
+      "additionalProperties": false,
+      "description": "Sample rows captured as evidence. Values are masked according to privacy settings.",
+      "properties": {
+        "columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "masked": {
+          "default": false,
+          "title": "Masked",
+          "type": "boolean"
+        },
+        "truncated": {
+          "default": false,
+          "title": "Truncated",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "columns",
+        "rows"
+      ],
+      "title": "SampleSet",
+      "type": "object"
+    },
+    "Severity": {
+      "description": "How serious a failed check is. Ordered from least to most severe.",
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "Side": {
+      "description": "Which dataset of a pair a check runs against.",
+      "enum": [
+        "source",
+        "target",
+        "both"
+      ],
+      "title": "Side",
+      "type": "string"
+    },
+    "Status": {
+      "description": "Outcome of a check, dataset, suite, or run.",
+      "enum": [
+        "passed",
+        "warning",
+        "failed",
+        "error",
+        "skipped",
+        "waived"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "StructField": {
+      "additionalProperties": false,
+      "description": "A named field of a ``STRUCT`` type.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/CanonicalType"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "title": "StructField",
+      "type": "object"
+    },
+    "SuiteResult": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "datasets": {
+          "items": {
+            "$ref": "#/$defs/DatasetPairResult"
+          },
+          "title": "Datasets",
+          "type": "array"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        }
+      },
+      "required": [
+        "name",
+        "status"
+      ],
+      "title": "SuiteResult",
+      "type": "object"
+    },
+    "TimingBreakdown": {
+      "additionalProperties": false,
+      "description": "Where time went, in milliseconds.",
+      "properties": {
+        "source_query_ms": {
+          "default": 0.0,
+          "title": "Source Query Ms",
+          "type": "number"
+        },
+        "target_query_ms": {
+          "default": 0.0,
+          "title": "Target Query Ms",
+          "type": "number"
+        },
+        "transfer_ms": {
+          "default": 0.0,
+          "title": "Transfer Ms",
+          "type": "number"
+        },
+        "compare_ms": {
+          "default": 0.0,
+          "title": "Compare Ms",
+          "type": "number"
+        },
+        "render_ms": {
+          "default": 0.0,
+          "title": "Render Ms",
+          "type": "number"
+        },
+        "total_ms": {
+          "default": 0.0,
+          "title": "Total Ms",
+          "type": "number"
+        }
+      },
+      "title": "TimingBreakdown",
+      "type": "object"
+    },
+    "WaiverApplied": {
+      "additionalProperties": false,
+      "description": "A waiver that turned a failure into an accepted difference.",
+      "properties": {
+        "selector": {
+          "title": "Selector",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "ticket": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ticket"
+        },
+        "expires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires"
+        },
+        "approved_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved By"
+        }
+      },
+      "required": [
+        "selector",
+        "reason"
+      ],
+      "title": "WaiverApplied",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The complete, canonical output of a run.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "project": {
+      "title": "Project",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/Status"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "ended_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ended At"
+    },
+    "duration_ms": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Ms"
+    },
+    "environment": {
+      "$ref": "#/$defs/RunEnvironment"
+    },
+    "summary": {
+      "$ref": "#/$defs/RunSummary"
+    },
+    "suites": {
+      "items": {
+        "$ref": "#/$defs/SuiteResult"
+      },
+      "title": "Suites",
+      "type": "array"
+    },
+    "config_snapshot": {
+      "additionalProperties": true,
+      "description": "Resolved configuration with secrets redacted.",
+      "title": "Config Snapshot",
+      "type": "object"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    }
+  },
+  "required": [
+    "run_id",
+    "project",
+    "status",
+    "started_at",
+    "environment"
+  ],
+  "type": "object"
+}

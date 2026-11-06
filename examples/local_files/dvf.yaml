@@ -1,0 +1,84 @@
+# yaml-language-server: $schema=../../schemas/config.schema.json
+#
+# Compare a CSV landing extract with the curated Parquet output, and check data quality.
+# Phase 0 validates this file (`dvf validate-config examples/local_files/dvf.yaml`).
+# Execution and sample data arrive in Phase 1.
+version: 1
+
+project:
+  name: local-files-demo
+  description: Landing CSV to curated Parquet, all on the local machine
+  metadata:
+    owner: data-engineering
+
+defaults:
+  engine: duckdb
+  sample_size: 20
+  normalization:
+    trim: both
+    timestamp_precision: ms
+
+connections:
+  landing:
+    type: files
+    path: ./data/landing
+    format: csv
+    options:
+      delimiter: ","
+      header: true
+  curated:
+    type: files
+    path: ./data/curated
+    format: parquet
+
+suites:
+  - name: customers
+    description: Customer master data
+    source: landing
+    target: curated
+    tags: [master-data, pr]
+    tables:
+      - name: customers
+        source: { path: customers.csv }
+        target: { path: customers.parquet }
+        keys: [customer_id]
+        columns:
+          exclude: [ingested_at]
+          mappings:
+            - { source: email_address, target: email, normalize: [lower] }
+            - { source_expr: "first_name || ' ' || last_name", target: full_name }
+        comparison:
+          strategies: [row_count, aggregate, row_hash]
+          tolerance: { numeric_abs: 0.001 }
+        checks:
+          - { type: not_null, columns: [customer_id, email] }
+          - { type: unique, columns: [customer_id] }
+          - type: regex
+            column: email
+            pattern: "^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$"
+            mostly: 0.99
+            details: { requirement: DQ-EMAIL-01 }
+          - { type: allowed_values, column: country_code, values: [DE, FR, GB, IN, US] }
+          - { type: row_count_range, min: 1 }
+
+      - name: orders
+        source: { path: orders.csv }
+        target: { path: orders.parquet }
+        keys: [order_id]
+        comparison:
+          strategies: [row_count, aggregate]
+          group_by: [order_date]
+        checks:
+          - type: referential_integrity
+            column: customer_id
+            parent: { table: customers.parquet, column: customer_id }
+          - type: expression
+            name: shipped_after_ordered
+            expression: shipped_at IS NULL OR shipped_at >= ordered_at
+          - { type: freshness, column: ordered_at, max_age: 2d, severity: warning }
+
+reports:
+  formats: [html, json, junit, markdown]
+  output_dir: ./reports/${run.date}/${run.id}
+  branding:
+    title: Local files demo
