@@ -1,0 +1,56 @@
+{#- Shared macros. Every value passes through autoescaping; never mark data as safe. -#}
+
+{% macro badge(status) -%}
+<span class="badge b-{{ status }}">{{ status }}</span>
+{%- endmacro %}
+
+{% macro value(v) -%}
+{% if v is none %}<span class="null">{{ v|fmt }}</span>
+{%- elif v is structured %}<pre class="wrap">{{ v|pretty }}</pre>
+{%- else %}<code>{{ v|fmt }}</code>
+{%- endif %}
+{%- endmacro %}
+
+{% macro kv(mapping) -%}
+<table class="kv">
+{% for key, v in mapping.items() %}
+<tr><th>{{ key }}</th><td>{% if v is structured %}<pre class="wrap">{{ v|pretty }}</pre>{% else %}{{ v|fmt }}{% endif %}</td></tr>
+{% endfor %}
+</table>
+{%- endmacro %}
+
+{% macro field(label, v) -%}
+<div><span class="k">{{ label }}</span>{{ v }}</div>
+{%- endmacro %}
+
+{% macro sample_cell(v) -%}
+{% if v is none %}<span class="null">NULL</span>
+{%- elif v is string %}<span class="v">{{ v|cell }}</span>
+{%- else %}{{ v|cell }}
+{%- endif %}
+{%- endmacro %}
+
+{% macro sample_table(sample, max_rows) -%}
+{% set rows = sample.rows[:max_rows] %}
+{% if rows %}
+<div class="table-wrap"><table class="data samples">
+<thead><tr>{% for col in sample.columns %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for row in rows %}
+<tr>{% for v in row %}<td>{{ sample_cell(v) }}</td>{% endfor %}</tr>
+{% endfor %}
+</tbody>
+</table></div>
+{% endif %}
+<p class="note">Showing {{ rows|length }} of {{ sample.rows|length }} sample rows
+{%- if sample.rows|length > rows|length %} (capped at {{ max_rows }} per check){% endif %}
+{%- if sample.truncated %}; more rows existed when the sample was captured{% endif %}
+{%- if sample.masked %}; values are masked{% endif %}.</p>
+{%- endmacro %}
+
+{% macro timing_table(timing, fields) -%}
+<table class="data">
+<thead><tr>{% for _attr, label in fields %}<th class="num">{{ label }}</th>{% endfor %}</tr></thead>
+<tbody><tr>{% for attr, _label in fields %}<td class="num">{{ timing[attr]|duration }}</td>{% endfor %}</tr></tbody>
+</table>
+{%- endmacro %}

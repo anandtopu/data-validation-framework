@@ -43,6 +43,22 @@ def tests_all(session: nox.Session) -> None:
 
 
 @nox.session(venv_backend="none")
+def integration(session: nox.Session) -> None:
+    """Integration tests (PostgreSQL). Set DVF_TEST_POSTGRES_URL, or have Docker available."""
+    session.run("uv", "run", "pytest", "-m", "integration", "-v", *session.posargs)
+
+
+@nox.session(venv_backend="none")
+def example(session: nox.Session) -> None:
+    """Scaffold the seeded example in a temporary folder and run it end to end."""
+    import tempfile
+
+    folder = tempfile.mkdtemp(prefix="dvf-example-")
+    session.run("uv", "run", "dvf", "init", f"{folder}/demo", "--example")
+    session.run("uv", "run", "dvf", "run", f"{folder}/demo/dvf.yaml", success_codes=[1])
+
+
+@nox.session(venv_backend="none")
 def schemas(session: nox.Session) -> None:
     """Regenerate the committed JSON Schemas."""
     session.run("uv", "run", "dvf", "schema", "config", "--output", "schemas/config.schema.json")

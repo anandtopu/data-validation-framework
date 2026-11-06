@@ -103,6 +103,53 @@ class ColumnMismatch(_Model):
     samples: SampleSet | None = None
 
 
+class MetricComparison(_Model):
+    """One metric compared between source and target: a row count or a control total.
+
+    Grouped comparisons produce one entry per group, with ``group`` holding the group's values.
+    """
+
+    metric: str = Field(description="For example 'row_count', 'sum', 'min', or 'null_count'.")
+    column: str | None = Field(default=None, description="Target column name, if any.")
+    source_column: str | None = None
+    group: dict[str, Any] | None = None
+    source: Any = None
+    target: Any = None
+    difference: float | None = Field(
+        default=None, description="Target minus source, for numeric metrics."
+    )
+    tolerance: float | None = None
+    passed: bool
+    note: str | None = None
+
+
+class ColumnProfile(_Model):
+    """Summary statistics of one column on one side."""
+
+    count: int
+    null_count: int
+    null_pct: float | None = None
+    distinct_count: int | None = None
+    min: Any = None
+    max: Any = None
+    mean: float | None = None
+    min_length: int | None = None
+    max_length: int | None = None
+    avg_length: float | None = None
+
+
+class ProfileComparison(_Model):
+    """Source and target profiles of a column, side by side."""
+
+    column: str
+    source_column: str | None = None
+    source: ColumnProfile | None = None
+    target: ColumnProfile | None = None
+    differences: list[str] = Field(
+        default_factory=list, description="Human-readable differences between the profiles."
+    )
+
+
 class ColumnSchemaDiff(_Model):
     """One row of a schema comparison."""
 
@@ -140,6 +187,7 @@ class CheckResult(_Model):
     mostly: float | None = None
     samples: SampleSet | None = None
     column_mismatches: list[ColumnMismatch] = Field(default_factory=list)
+    metrics: list[MetricComparison] = Field(default_factory=list)
     hints: list[str] = Field(default_factory=list)
     artifacts: list[ArtifactRef] = Field(default_factory=list)
     queries: list[QueryRecord] = Field(default_factory=list)
@@ -197,6 +245,7 @@ class DatasetPairResult(_Model):
     row_counts: RowCounts = Field(default_factory=RowCounts)
     reconciliation: ReconciliationSummary | None = None
     schema_diff: list[ColumnSchemaDiff] = Field(default_factory=list)
+    profiles: list[ProfileComparison] = Field(default_factory=list)
     checks: list[CheckResult] = Field(default_factory=list)
     duration_ms: float | None = None
     details: dict[str, Any] = Field(default_factory=dict)

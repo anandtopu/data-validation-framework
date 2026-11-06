@@ -1,0 +1,143 @@
+{% import "_macros.html.j2" as m %}
+<section id="tables" class="card">
+  <h2>Tables</h2>
+  {% if not suites %}<p class="muted">No suites in this run.</p>{% endif %}
+  {% for sv in suites %}
+  {% set s = sv.suite %}
+  <div class="suite">
+    <h3>{{ m.badge(s.status) }} Suite {{ s.name }}
+      <span class="muted">· {{ sv.datasets|length }} table{{ '' if sv.datasets|length == 1 else 's' }} · {{ s.duration_ms|duration }}</span>
+      {% for t in s.tags %}<span class="tag">{{ t }}</span>{% endfor %}
+    </h3>
+    {% for dv in sv.datasets %}
+    {% set d = dv.dataset %}
+    {% set rec = d.reconciliation %}
+    <details class="table-card st-{{ d.status }}" id="{{ dv.anchor }}"{% if d.status not in ('passed', 'skipped', 'waived') %} open{% endif %}>
+      <summary>
+        {{ m.badge(d.status) }}
+        <strong>{{ d.name }}</strong>
+        {% if d.source or d.target %}<span class="muted">{{ d.source.display() if d.source else '?' }} → {{ d.target.display() if d.target else '?' }}</span>{% endif %}
+        {% for status, n in dv.counts %}<span class="badge b-{{ status }}">{{ n }} {{ status }}</span>{% endfor %}
+        {% if d.duration_ms is not none %}<span class="muted">{{ d.duration_ms|duration }}</span>{% endif %}
+      </summary>
+      <div class="body">
+        <div class="blocks">
+          <div class="block">
+            <h4>Row counts</h4>
+            <table class="kv">
+              <tr><th>Source</th><td>{{ d.row_counts.source|count }}</td></tr>
+              <tr><th>Target</th><td>{{ d.row_counts.target|count }}</td></tr>
+              <tr><th>Difference</th><td class="{{ 'bad' if d.row_counts.difference else '' }}">{{ d.row_counts.difference|signed }}</td></tr>
+            </table>
+          </div>
+          <div class="block">
+            <h4>Reconciliation</h4>
+            {% if rec %}
+            <table class="kv">
+              <tr><th>Matched</th><td>{{ rec.matched|count }}</td></tr>
+              <tr><th>Mismatched</th><td class="{{ 'bad' if rec.mismatched else '' }}">{{ rec.mismatched|count }}</td></tr>
+              <tr><th>Missing in target</th><td class="{{ 'bad' if rec.missing_in_target else '' }}">{{ rec.missing_in_target|count }}</td></tr>
+              <tr><th>Extra in target</th><td class="{{ 'bad' if rec.extra_in_target else '' }}">{{ rec.extra_in_target|count }}</td></tr>
+              <tr><th>Duplicate keys</th><td>source {{ rec.duplicate_keys_source|count }} · target {{ rec.duplicate_keys_target|count }}</td></tr>
+              <tr><th>Null keys</th><td>source {{ rec.null_keys_source|count }} · target {{ rec.null_keys_target|count }}</td></tr>
+              <tr><th>Match %</th><td><strong>{{ rec.match_pct|pct }}</strong></td></tr>
+            </table>
+            {% else %}
+            <p class="muted">No key-level reconciliation for this table.</p>
+            {% endif %}
+          </div>
+          <div class="block">
+            <h4>Quality dimensions</h4>
+            {% for ds in dv.dimensions %}
+            {% set score = ds.score %}
+            <div class="dim">
+              <span>{{ ds.dimension }}</span>
+              <span class="track"><span class="fill{% if score is not none and score < 50 %} low{% elif score is not none and score < 100 %} mid{% endif %}" style="width: {{ (score or 0)|round(1) }}%"></span></span>
+              <span class="num">{{ score|pct }} <span class="muted">({{ ds.passed }}/{{ ds.evaluated }})</span></span>
+            </div>
+            {% else %}
+            <p class="muted">No checks.</p>
+            {% endfor %}
+          </div>
+        </div>
+
+        {% if d.schema_diff %}
+        <h4>Schema diff</h4>
+        <div class="table-wrap"><table class="data schema-diff">
+          <thead><tr>
+            <th>Status</th><th>Source column</th><th>Source type</th><th>Source canonical</th>
+            <th>Target column</th><th>Target type</th><th>Target canonical</th>
+            <th>Compatibility</th><th>Reasons</th><th>Nullability</th>
+          </tr></thead>
+          <tbody>
+          {% for row in d.schema_diff %}
+          {% set flagged = row.status != 'matched' or (row.compatibility is not none and row.compatibility != 'exact') or row.nullable_change %}
+          <tr{% if flagged %} class="hl"{% endif %}>
+            <td>{{ row.status }}</td>
+            <td><code>{{ row.source_column|fmt }}</code></td>
+            <td class="mono">{{ row.source_native_type|fmt }}</td>
+            <td class="mono">{{ row.source_type|fmt }}</td>
+            <td><code>{{ row.target_column|fmt }}</code></td>
+            <td class="mono">{{ row.target_native_type|fmt }}</td>
+            <td class="mono">{{ row.target_type|fmt }}</td>
+            <td>{% if row.compatibility %}<span class="compat compat-{{ row.compatibility }}">{{ row.compatibility }}</span>{% else %}{{ none|fmt }}{% endif %}</td>
+            <td>{% for reason in row.reasons %}<div>{{ reason }}</div>{% endfor %}</td>
+            <td>{{ row.nullable_change|fmt }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table></div>
+        {% endif %}
+
+        {% if dv.mismatches %}
+        <h4>Column mismatch matrix</h4>
+        <div class="table-wrap"><table class="data mismatch-matrix">
+          <thead><tr><th>Check</th><th>Column</th><th class="num">Mismatches</th><th class="num">%</th><th>Classification</th><th>Hints</th></tr></thead>
+          <tbody>
+          {% for row in dv.mismatches %}
+          {% set mm = row.mismatch %}
+          <tr>
+            <td>{% if row.view.included %}<a href="#{{ row.view.anchor }}"><code>{{ row.view.check.check_id }}</code></a>{% else %}<code>{{ row.view.check.check_id }}</code>{% endif %}</td>
+            <td><code>{{ mm.column }}</code>{% if mm.source_column and mm.source_column != mm.column %} <span class="muted">← {{ mm.source_column }}</span>{% endif %}</td>
+            <td class="num">{{ mm.mismatch_count|count }}</td>
+            <td class="num">{{ mm.mismatch_pct|pct }}</td>
+            <td>{% for name, n in mm.classifications|classes %}<span class="tag cls">{{ name }}: {{ n|count }}</span>{% endfor %}</td>
+            <td>{% for hint in mm.hints %}<div>{{ hint }}</div>{% endfor %}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table></div>
+        {% endif %}
+
+        {% if dv.profiles %}
+        <h4>Profile comparison</h4>
+        <div class="table-wrap"><table class="data grouped profile">
+          <thead><tr><th>Column</th><th>Side</th>{% for _attr, label in profile_stats %}<th class="num">{{ label }}</th>{% endfor %}<th>Differences</th></tr></thead>
+          {% for pv in dv.profiles %}
+          {% set p = pv.comparison %}
+          <tbody{% if p.differences %} class="has-diff"{% endif %}>
+            <tr>
+              <td rowspan="2"><code>{{ p.column }}</code>{% if p.source_column and p.source_column != p.column %}<div class="muted">source: {{ p.source_column }}</div>{% endif %}</td>
+              <td>source</td>
+              {% for cell in pv.cells %}<td class="num{{ ' diff' if cell.differs else '' }}">{{ cell.source }}</td>{% endfor %}
+              <td rowspan="2">{% for diff in p.differences %}<div>{{ diff }}</div>{% else %}<span class="muted">none</span>{% endfor %}</td>
+            </tr>
+            <tr>
+              <td>target</td>
+              {% for cell in pv.cells %}<td class="num{{ ' diff' if cell.differs else '' }}">{{ cell.target }}</td>{% endfor %}
+            </tr>
+          </tbody>
+          {% endfor %}
+        </table></div>
+        {% endif %}
+
+        {% if d.details %}
+        <h4>Table details</h4>
+        {{ m.kv(d.details) }}
+        {% endif %}
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</section>

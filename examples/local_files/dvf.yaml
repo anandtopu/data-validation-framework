@@ -1,8 +1,11 @@
 # yaml-language-server: $schema=../../schemas/config.schema.json
 #
 # Compare a CSV landing extract with the curated Parquet output, and check data quality.
-# Phase 0 validates this file (`dvf validate-config examples/local_files/dvf.yaml`).
-# Execution and sample data arrive in Phase 1.
+# The data is synthetic and contains seeded defects, so the run reports failures on purpose:
+# missing, extra, and duplicate rows; whitespace, case, leading-zero, rounding, truncation,
+# time zone, NULL, encoding, and value changes; a type change; and orphaned orders.
+#
+#   dvf run dvf.yaml
 version: 1
 
 project:
@@ -15,7 +18,6 @@ defaults:
   engine: duckdb
   sample_size: 20
   normalization:
-    trim: both
     timestamp_precision: ms
 
 connections:
@@ -24,7 +26,6 @@ connections:
     path: ./data/landing
     format: csv
     options:
-      delimiter: ","
       header: true
   curated:
     type: files
@@ -39,17 +40,20 @@ suites:
     tags: [master-data, pr]
     tables:
       - name: customers
-        source: { path: customers.csv }
+        source:
+          path: customers.csv
+          options:
+            types: { customer_code: VARCHAR, balance: "DECIMAL(12,3)" }
         target: { path: customers.parquet }
         keys: [customer_id]
         columns:
           exclude: [ingested_at]
           mappings:
-            - { source: email_address, target: email, normalize: [lower] }
+            - { source: email_address, target: email }
             - { source_expr: "first_name || ' ' || last_name", target: full_name }
         comparison:
           strategies: [row_count, aggregate, row_hash]
-          tolerance: { numeric_abs: 0.001 }
+          on_mismatch: full_diff
         checks:
           - { type: not_null, columns: [customer_id, email] }
           - { type: unique, columns: [customer_id] }
@@ -62,7 +66,10 @@ suites:
           - { type: row_count_range, min: 1 }
 
       - name: orders
-        source: { path: orders.csv }
+        source:
+          path: orders.csv
+          options:
+            types: { amount: "DECIMAL(10,2)" }
         target: { path: orders.parquet }
         keys: [order_id]
         comparison:

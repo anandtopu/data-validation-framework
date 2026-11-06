@@ -1,0 +1,110 @@
+{% raw %}
+(function () {
+  "use strict";
+  document.documentElement.classList.add("js");
+  var list = document.getElementById("check-list");
+  var search = document.getElementById("check-search");
+  var sort = document.getElementById("check-sort");
+  var counter = document.getElementById("check-counter");
+  var filters = document.querySelectorAll("#check-toolbar .status-filter");
+  var items = [];
+  var timer = null;
+
+  function num(el, name) {
+    var value = Number(el.getAttribute(name));
+    return isFinite(value) ? value : 0;
+  }
+
+  if (list) {
+    for (var i = 0; i < list.children.length; i++) {
+      var el = list.children[i];
+      if (el.tagName !== "DETAILS") { continue; }
+      items.push({
+        el: el,
+        status: el.getAttribute("data-status"),
+        rank: num(el, "data-rank"),
+        severity: num(el, "data-severity"),
+        unexpected: num(el, "data-unexpected"),
+        duration: num(el, "data-duration"),
+        order: num(el, "data-order"),
+        id: el.getAttribute("data-id") || "",
+        text: (el.getAttribute("data-search") || "").toLowerCase()
+      });
+    }
+  }
+
+  function apply() {
+    var terms = search ? search.value.toLowerCase().split(/\s+/).filter(Boolean) : [];
+    var active = {};
+    for (var f = 0; f < filters.length; f++) {
+      if (filters[f].checked) { active[filters[f].value] = true; }
+    }
+    var shown = 0;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var ok = active[it.status] === true;
+      for (var t = 0; ok && t < terms.length; t++) {
+        if (it.text.indexOf(terms[t]) < 0) { ok = false; }
+      }
+      it.el.hidden = !ok;
+      if (ok) { shown++; }
+    }
+    if (counter) { counter.textContent = "Showing " + shown + " of " + items.length; }
+  }
+
+  var comparators = {
+    order: function (a, b) { return a.order - b.order; },
+    status: function (a, b) {
+      return a.rank - b.rank || b.severity - a.severity || b.unexpected - a.unexpected || a.order - b.order;
+    },
+    severity: function (a, b) { return b.severity - a.severity || a.rank - b.rank || a.order - b.order; },
+    unexpected: function (a, b) { return b.unexpected - a.unexpected || a.order - b.order; },
+    duration: function (a, b) { return b.duration - a.duration || a.order - b.order; },
+    id: function (a, b) { return a.id < b.id ? -1 : (a.id > b.id ? 1 : a.order - b.order); }
+  };
+
+  function reorder() {
+    var compare = comparators[sort.value] || comparators.order;
+    var sorted = items.slice().sort(compare);
+    var fragment = document.createDocumentFragment();
+    for (var i = 0; i < sorted.length; i++) { fragment.appendChild(sorted[i].el); }
+    list.appendChild(fragment);
+  }
+
+  function setOpen(open) {
+    for (var i = 0; i < items.length; i++) {
+      if (!items[i].el.hidden) { items[i].el.open = open; }
+    }
+  }
+
+  function reveal() {
+    var id = "";
+    try { id = decodeURIComponent(window.location.hash.slice(1)); } catch (e) { return; }
+    var target = id ? document.getElementById(id) : null;
+    if (!target || target.tagName !== "DETAILS") { return; }
+    if (target.hidden) {
+      for (var f = 0; f < filters.length; f++) { filters[f].checked = true; }
+      if (search) { search.value = ""; }
+      apply();
+    }
+    target.open = true;
+    target.scrollIntoView();
+  }
+
+  for (var f = 0; f < filters.length; f++) { filters[f].addEventListener("change", apply); }
+  if (search) {
+    search.addEventListener("input", function () {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(apply, 120);
+    });
+  }
+  if (sort && list) { sort.addEventListener("change", reorder); }
+  var expand = document.getElementById("expand-all");
+  var collapse = document.getElementById("collapse-all");
+  if (expand) { expand.addEventListener("click", function () { setOpen(true); }); }
+  if (collapse) { collapse.addEventListener("click", function () { setOpen(false); }); }
+  window.addEventListener("hashchange", reveal);
+  apply();
+  reveal();
+})();
+{% endraw %}

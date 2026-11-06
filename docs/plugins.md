@@ -3,7 +3,7 @@
 Everything in dvf is a component in one registry, including the built-ins. The design is recorded in [ADR 0005](adr/0005-plugin-api.md).
 
 !!! note "Plugin API 0.1"
-    Until dvf 1.0 the plugin API may change between minor versions. Phase 1 adds the execution methods (`plan()` and `evaluate()` for checks, data access methods for connectors). Declare the versions you support with `dvf_plugin_api`.
+    Until dvf 1.0 the plugin API may change between minor versions. Declare the versions you support with `dvf_plugin_api`.
 
 ## Component kinds
 
@@ -24,15 +24,15 @@ Names are lowercase and may be namespaced with dots. Use your organization as th
 
 ## A project-local check
 
-Put a Python file in a folder and list the folder under `plugins.paths`:
+Put a Python file in a folder and list the folder under `plugins.paths`. Most checks are "every row must satisfy a condition": subclass `RowCheck` and return a SQL condition that is true for valid rows. dvf counts the rows where it is not true, applies `where` and `mostly`, samples failing rows (masked), and records the SQL.
 
 ```python
 # plugins/acme_checks.py
-from dvf.plugins import Check, CheckConfig, Dimension, register_check
+from dvf.plugins import CheckConfig, CheckContext, Dimension, RowCheck, register_check
 
 
 @register_check("acme.vat_number_valid")
-class VatNumberValid(Check):
+class VatNumberValid(RowCheck):
     """VAT numbers must be valid for their country."""
 
     dimension = Dimension.VALIDITY
@@ -41,7 +41,10 @@ class VatNumberValid(Check):
     class Config(CheckConfig):
         column: str
         """Column holding the VAT number."""
-        country_column: str | None = None
+
+    def predicate(self, ctx: CheckContext) -> str:
+        vat = ctx.text(ctx.col(self.config.column))
+        return ctx.regex_match(vat, r"[A-Z]{2}[0-9A-Z]{8,12}")
 ```
 
 ```yaml
@@ -55,10 +58,26 @@ suites:
       - name: customers
         # ...
         checks:
-          - { type: acme.vat_number_valid, column: VAT_ID, country_column: COUNTRY }
+          - { type: acme.vat_number_valid, column: VAT_ID, mostly: 0.999 }
 ```
 
 dvf validates the check's fields with your `Config` model, reports errors with line numbers, and includes the model in the exported JSON Schema.
+
+The `CheckContext` helpers produce SQL for the dataset's dialect, so one check runs on DuckDB, SQLite, PostgreSQL, and files:
+
+| Helper | Returns |
+|---|---|
+| `ctx.col(name)` | The column as a quoted identifier (matched case-insensitively; a clear error lists the available columns) |
+| `ctx.text(expr)`, `ctx.literal(value)` | A cast to text; a safely quoted literal |
+| `ctx.regex_match(expr, pattern, full=True)` | A regular expression match in the dialect's syntax |
+| `ctx.from_where(extra)` | `FROM <dataset> WHERE <where> AND <extra>` |
+| `ctx.query(sql)`, `ctx.scalar(sql)`, `ctx.row(sql)` | Run SQL on the dataset's connection (recorded for reproducibility) |
+| `ctx.sample(sql)` | Masked sample rows |
+| `ctx.evaluate_predicate(condition, columns=[...])` | The full row-check evaluation |
+
+For anything else, subclass `Check` and implement `evaluate(ctx)`, returning a `CheckOutcome` (`passed`, `message`, `observed`, `expected`, `unexpected_count`, `total_count`, `samples`, `details`). dvf adds the check ID, severity, timing, queries, and hooks.
+
+Other component kinds follow the same pattern: subclass `Connector`, `Comparator`, `Normalizer` (SQL, Polars, and Python implementations that must agree), or `Reporter` (render a `RunResult` into files) from `dvf.plugins`.
 
 ## A distributable plugin package
 
@@ -88,7 +107,7 @@ def on_config_loaded(config):
         raise ValueError("project.metadata.release is required by our team policy")
 ```
 
-| Hook | Called | Phase |
+| Hook | Called | Since |
 |---|---|---|
 | `on_config_loaded(config)` | After configuration loads and validates | 0 |
 | `modify_plan(plan)` | Before the plan runs | 1 |
@@ -100,7 +119,7 @@ def on_config_loaded(config):
 | `on_failure(run_id, result)` | For failed or errored checks | 1 |
 | `on_suite_end(run_id, result)` | After each suite | 1 |
 | `on_run_end(result)` | After the run, before reports | 1 |
-| `report_sections(result, report_format)` | While rendering reports; return extra sections | 1 |
+| `report_sections(result, report_format)` | While rendering reports; return `[{"title": ..., "content": ...}]` | 1 |
 
 ## Secret providers
 

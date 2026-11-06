@@ -50,6 +50,37 @@ class SecretError(DvfError):
     """A secret reference could not be parsed or resolved."""
 
 
+class ExecutionError(DvfError):
+    """Running a check or comparison failed (a connection, query, or engine problem).
+
+    ``hint`` says how to fix it, when dvf knows.
+    """
+
+    def __init__(self, message: str, *, hint: str | None = None) -> None:
+        super().__init__(message)
+        self.hint = hint
+
+
+class ConnectorError(ExecutionError):
+    """A connector could not connect, resolve a dataset, or run a query."""
+
+
+class DependencyError(ExecutionError):
+    """An optional dependency (a pip extra) is needed but not installed."""
+
+    def __init__(self, package: str, extra: str, purpose: str) -> None:
+        super().__init__(
+            f"{purpose} needs the '{package}' package, which is not installed.",
+            hint=f"Install it with: pip install 'dvf[{extra}]'",
+        )
+        self.package = package
+        self.extra = extra
+
+
+class PlanError(ExecutionError):
+    """A table cannot be compared as configured (for example, a key column does not exist)."""
+
+
 def _quote_list(items: Sequence[str]) -> str:
     quoted = [f"'{item}'" for item in items]
     if len(quoted) <= 1:

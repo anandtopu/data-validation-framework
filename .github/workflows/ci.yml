@@ -46,11 +46,46 @@ jobs:
         run: |
           uv run dvf validate-config examples/local_files/dvf.yaml
           uv run dvf validate-config examples/sap_to_snowflake/dvf.yaml --profile uat
+      - name: Run the seeded example end to end (exit code 1 = defects found, as intended)
+        shell: bash
+        run: |
+          uv run dvf init "$RUNNER_TEMP/demo" --example
+          set +e
+          uv run dvf run "$RUNNER_TEMP/demo/dvf.yaml" -o "$RUNNER_TEMP/demo/out"
+          code=$?
+          set -e
+          test "$code" -eq 1
+          test -f "$RUNNER_TEMP/demo/out/report.html"
       - uses: actions/upload-artifact@v7
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         with:
           name: coverage
           path: coverage.xml
+
+  integration:
+    name: Integration (PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: dvf-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DVF_TEST_POSTGRES_URL: postgresql://postgres:dvf-ci@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - run: uv run pytest -m integration -v
 
   docs:
     name: Docs build
@@ -78,3 +113,6 @@ jobs:
           uv pip install --python /tmp/wheel-test dist/*.whl
           /tmp/wheel-test/bin/dvf --version
           /tmp/wheel-test/bin/dvf validate-config examples/local_files/dvf.yaml
+          /tmp/wheel-test/bin/dvf init /tmp/demo --example
+          set +e; /tmp/wheel-test/bin/dvf run /tmp/demo/dvf.yaml --no-reports; code=$?; set -e
+          test "$code" -eq 1

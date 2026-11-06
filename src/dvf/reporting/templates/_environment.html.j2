@@ -1,0 +1,81 @@
+{% import "_macros.html.j2" as m %}
+<section id="reproducibility" class="card">
+  <h2>Reproducibility</h2>
+  <div class="blocks">
+    <div class="block">
+      <h4>Run</h4>
+      <table class="kv">
+        <tr><th>Run ID</th><td class="mono">{{ run.run_id }}</td></tr>
+        <tr><th>Project</th><td>{{ run.project }}</td></tr>
+        <tr><th>Results schema</th><td>{{ run.schema_version }}</td></tr>
+        <tr><th>Started</th><td>{{ run.started_at|dt }}</td></tr>
+        <tr><th>Ended</th><td>{{ run.ended_at|dt }}</td></tr>
+        <tr><th>Duration</th><td>{{ run.duration_ms|duration }}</td></tr>
+        <tr><th>Profile</th><td>{{ env.profile|fmt }}</td></tr>
+        <tr><th>Git SHA</th><td class="mono">{{ env.git_sha|fmt }}</td></tr>
+        <tr><th>Config hash</th><td class="mono">{{ env.config_hash|fmt }}</td></tr>
+      </table>
+    </div>
+    <div class="block">
+      <h4>Platform</h4>
+      <table class="kv">
+        <tr><th>dvf</th><td>{{ env.dvf_version }}</td></tr>
+        <tr><th>Python</th><td>{{ env.python_version }}</td></tr>
+        <tr><th>Platform</th><td>{{ env.platform }}</td></tr>
+        <tr><th>Host</th><td>{{ env.hostname|fmt }}</td></tr>
+        <tr><th>Rendered by</th><td>{{ generator }}</td></tr>
+      </table>
+    </div>
+    <div class="block">
+      <h4>Plugins</h4>
+      {% if env.plugins %}{{ m.kv(env.plugins) }}{% else %}<p class="muted">No third-party plugins.</p>{% endif %}
+      <h4>Engines and drivers</h4>
+      {% if env.engines %}{{ m.kv(env.engines) }}{% else %}<p class="muted">None recorded.</p>{% endif %}
+    </div>
+  </div>
+
+  <h4>Configuration files</h4>
+  {% if env.config_files %}
+  <ul>{% for f in env.config_files %}<li><code>{{ f }}</code></li>{% endfor %}</ul>
+  {% else %}<p class="muted">None recorded.</p>{% endif %}
+
+  <h4>Command line</h4>
+  {% if env.cli_args %}<pre class="wrap"><code>{{ cli }}</code></pre>{% else %}<p class="muted">Not run from the command line.</p>{% endif %}
+
+  <h4>Timing breakdown</h4>
+  {% if timing %}
+  <p class="note">Sum over all checks that reported a breakdown.</p>
+  {{ m.timing_table(timing, timing_fields) }}
+  {% else %}<p class="muted">No check reported a timing breakdown.</p>{% endif %}
+
+  {% if suites %}
+  <div class="table-wrap"><table class="data durations">
+    <thead><tr><th>Suite</th><th>Table</th><th>Status</th><th class="num">Checks</th><th class="num">Duration</th></tr></thead>
+    <tbody>
+    {% for sv in suites %}
+    <tr><td><strong>{{ sv.suite.name }}</strong></td><td class="muted">all tables</td><td>{{ m.badge(sv.suite.status) }}</td><td class="num">{{ sv.check_count|count }}</td><td class="num">{{ sv.suite.duration_ms|duration }}</td></tr>
+    {% for dv in sv.datasets %}
+    <tr><td></td><td><a href="#{{ dv.anchor }}">{{ dv.dataset.name }}</a></td><td>{{ m.badge(dv.dataset.status) }}</td><td class="num">{{ dv.dataset.checks|length }}</td><td class="num">{{ dv.dataset.duration_ms|duration }}</td></tr>
+    {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+
+  {% if slowest %}
+  <h4>Slowest checks</h4>
+  <div class="table-wrap"><table class="data slowest">
+    <thead><tr><th>Check</th><th>Status</th><th class="num">Duration</th></tr></thead>
+    <tbody>
+    {% for c in slowest %}
+    <tr><td>{% if c.included %}<a href="#{{ c.anchor }}"><code>{{ c.check.check_id }}</code></a>{% else %}<code>{{ c.check.check_id }}</code>{% endif %}</td><td>{{ m.badge(c.check.status) }}</td><td class="num">{{ c.check.duration_ms|duration }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+
+  <details class="sub">
+    <summary>Configuration snapshot (secrets redacted)</summary>
+    <pre>{{ config_json }}</pre>
+  </details>
+</section>

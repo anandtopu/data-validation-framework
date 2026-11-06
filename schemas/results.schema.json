@@ -313,6 +313,13 @@
           "title": "Column Mismatches",
           "type": "array"
         },
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/MetricComparison"
+          },
+          "title": "Metrics",
+          "type": "array"
+        },
         "hints": {
           "items": {
             "type": "string"
@@ -522,6 +529,106 @@
       "title": "ColumnMismatch",
       "type": "object"
     },
+    "ColumnProfile": {
+      "additionalProperties": false,
+      "description": "Summary statistics of one column on one side.",
+      "properties": {
+        "count": {
+          "title": "Count",
+          "type": "integer"
+        },
+        "null_count": {
+          "title": "Null Count",
+          "type": "integer"
+        },
+        "null_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Null Pct"
+        },
+        "distinct_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Distinct Count"
+        },
+        "min": {
+          "default": null,
+          "title": "Min"
+        },
+        "max": {
+          "default": null,
+          "title": "Max"
+        },
+        "mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mean"
+        },
+        "min_length": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Length"
+        },
+        "max_length": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Length"
+        },
+        "avg_length": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avg Length"
+        }
+      },
+      "required": [
+        "count",
+        "null_count"
+      ],
+      "title": "ColumnProfile",
+      "type": "object"
+    },
     "ColumnSchemaDiff": {
       "additionalProperties": false,
       "description": "One row of a schema comparison.",
@@ -714,6 +821,13 @@
           "title": "Schema Diff",
           "type": "array"
         },
+        "profiles": {
+          "items": {
+            "$ref": "#/$defs/ProfileComparison"
+          },
+          "title": "Profiles",
+          "type": "array"
+        },
         "checks": {
           "items": {
             "$ref": "#/$defs/CheckResult"
@@ -870,6 +984,167 @@
       ],
       "title": "LogicalType",
       "type": "string"
+    },
+    "MetricComparison": {
+      "additionalProperties": false,
+      "description": "One metric compared between source and target: a row count or a control total.\n\nGrouped comparisons produce one entry per group, with ``group`` holding the group's values.",
+      "properties": {
+        "metric": {
+          "description": "For example 'row_count', 'sum', 'min', or 'null_count'.",
+          "title": "Metric",
+          "type": "string"
+        },
+        "column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Target column name, if any.",
+          "title": "Column"
+        },
+        "source_column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Column"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group"
+        },
+        "source": {
+          "default": null,
+          "title": "Source"
+        },
+        "target": {
+          "default": null,
+          "title": "Target"
+        },
+        "difference": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Target minus source, for numeric metrics.",
+          "title": "Difference"
+        },
+        "tolerance": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tolerance"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "metric",
+        "passed"
+      ],
+      "title": "MetricComparison",
+      "type": "object"
+    },
+    "ProfileComparison": {
+      "additionalProperties": false,
+      "description": "Source and target profiles of a column, side by side.",
+      "properties": {
+        "column": {
+          "title": "Column",
+          "type": "string"
+        },
+        "source_column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Column"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ColumnProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ColumnProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "differences": {
+          "description": "Human-readable differences between the profiles.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Differences",
+          "type": "array"
+        }
+      },
+      "required": [
+        "column"
+      ],
+      "title": "ProfileComparison",
+      "type": "object"
     },
     "QueryRecord": {
       "additionalProperties": false,

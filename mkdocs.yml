@@ -17,6 +17,7 @@ nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Configuration: configuration.md
+  - Checks and comparisons: validations.md
   - Plugins: plugins.md
   - API reference: reference.md
   - Architecture decisions:
@@ -27,6 +28,7 @@ nav:
       - adr/0004-canonical-result-model.md
       - adr/0005-plugin-api.md
       - adr/0006-configuration-model.md
+      - adr/0007-phase1-execution-model.md
 
 markdown_extensions:
   - admonition

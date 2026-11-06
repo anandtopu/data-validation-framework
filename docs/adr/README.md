@@ -10,3 +10,4 @@ We record significant decisions using [Michael Nygard's format](https://cognitec
 | [0004](0004-canonical-result-model.md) | One canonical, versioned result model | Accepted |
 | [0005](0005-plugin-api.md) | Plugin API: registry, entry points, and pluggy hooks | Accepted |
 | [0006](0006-configuration-model.md) | Configuration model and loading pipeline | Accepted |
+| [0007](0007-phase1-execution-model.md) | Phase 1 execution model | Accepted |

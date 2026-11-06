@@ -37,8 +37,11 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
+  "duckdb>=1.4,<2",
+  "jinja2>=3.1",
   "packaging>=24.0",
   "pluggy>=1.5",
+  "pyarrow>=18",
   "pydantic>=2.10,<3",
   "python-dotenv>=1.0",
   "pyyaml>=6.0.1",
@@ -49,7 +52,17 @@ dependencies = [
 ]
 
 # Connector, engine, and format extras are added as their implementations land (Phase 1 onward).
+# Optional engines and connectors. Proprietary drivers are never bundled.
 [project.optional-dependencies]
+polars = [
+    "polars>=1.20,<2",
+]
+postgres = [
+    "psycopg[binary]>=3.2",
+]
+all = [
+    "dvf[polars,postgres]",
+]
 
 [project.scripts]
 dvf = "dvf.cli.app:main"
@@ -60,10 +73,13 @@ dev = [
   "jsonschema>=4.22",
   "mypy>=1.11",
   "nox>=2024.4.15",
+  "polars>=1.20,<2",
   "pre-commit>=3.7",
+  "psycopg[binary]>=3.2",
   "pytest>=8.2",
   "pytest-cov>=5.0",
   "ruff>=0.6",
+  "testcontainers[postgres]>=4.8",
   "types-PyYAML>=6.0",
 ]
 docs = [
@@ -119,7 +135,11 @@ select = [
 ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106", "S108"]
+"tests/**" = ["S101", "S105", "S106", "S108", "S608"]
+# Pushdown SQL is generated on purpose: identifiers are quoted and literals escaped by
+# dvf.sql.dialects, and user SQL fragments are trusted configuration (BUILD_PROMPT.md 13).
+# assert is used only to narrow types for mypy on internal invariants, never to validate input.
+"src/dvf/**" = ["S101", "S608"]
 "noxfile.py" = ["S"]
 
 [tool.ruff.lint.isort]
@@ -133,6 +153,10 @@ mypy_path = "src"
 packages = ["dvf"]
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["pyarrow", "pyarrow.*"]
+ignore_missing_imports = true
 
 [tool.pydantic-mypy]
 init_forbid_extra = true

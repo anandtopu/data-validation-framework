@@ -19,8 +19,9 @@ from rich.table import Table
 from dvf import __version__, api
 from dvf.config.diagnostics import Diagnostic
 from dvf.config.models import CONFIG_VERSION
+from dvf.core.enums import Severity, Status
 from dvf.core.errors import ConfigError, DvfError
-from dvf.models.results import RESULTS_SCHEMA_VERSION
+from dvf.models.results import RESULTS_SCHEMA_VERSION, RunResult
 from dvf.observability.logging import LogFormat, configure_logging
 from dvf.plugins.local import load_local_plugins
 from dvf.plugins.registry import PLUGIN_API_VERSION, PluginKind, get_registry
@@ -70,7 +71,9 @@ schema_app = typer.Typer(help="Export JSON Schemas.", no_args_is_help=True)
 plugins_app = typer.Typer(
     help="Inspect installed plugins and built-in components.", no_args_is_help=True
 )
+connections_app = typer.Typer(help="Work with connections.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
+app.add_typer(connections_app, name="connections")
 app.add_typer(schema_app, name="schema")
 app.add_typer(plugins_app, name="plugins")
 
@@ -417,6 +420,345 @@ def plugins_list_command(
         err.print(
             f"[yellow]warning[/] plugin {escape(failure.source)} failed to load: {escape(failure.error)}"
         )
+
+
+_STATUS_STYLE = {
+    Status.PASSED: "green",
+    Status.WARNING: "yellow",
+    Status.FAILED: "red",
+    Status.ERROR: "bold red",
+    Status.SKIPPED: "dim",
+    Status.WAIVED: "blue",
+}
+
+
+def _status_text(status: Status) -> str:
+    return f"[{_STATUS_STYLE[status]}]{status.value.upper()}[/]"
+
+
+def _print_run(result: RunResult, artifacts: list[Any], verbose: bool) -> None:
+    table = Table(title=f"dvf run {escape(result.run_id)}", title_justify="left")
+    headers = (
+        "Suite",
+        "Table",
+        "Status",
+        "Source rows",
+        "Target rows",
+        "Missing",
+        "Extra",
+        "Mismatched",
+        "Failed checks",
+    )
+    for column in headers:
+        table.add_column(column, justify="left" if column in headers[:3] else "right")
+    for suite in result.suites:
+        for dataset in suite.datasets:
+            rec = dataset.reconciliation
+            bad = sum(1 for c in dataset.checks if c.status in (Status.FAILED, Status.ERROR))
+            counts = dataset.row_counts
+            table.add_row(
+                escape(suite.name),
+                escape(dataset.name),
+                _status_text(dataset.status),
+                "" if counts.source is None else f"{counts.source:,}",
+                "" if counts.target is None else f"{counts.target:,}",
+                f"{rec.missing_in_target:,}" if rec else "",
+                f"{rec.extra_in_target:,}" if rec else "",
+                f"{rec.mismatched:,}" if rec else "",
+                str(bad),
+            )
+    out.print(table)
+    problems = [
+        c for c in result.iter_checks() if c.status in (Status.FAILED, Status.ERROR, Status.WARNING)
+    ]
+    shown = problems if verbose else problems[:15]
+    for check in shown:
+        out.print(
+            f"{_status_text(check.status)} [bold]{escape(check.check_id)}[/]: {escape(check.message or '')}"
+        )
+        for mismatch in check.column_mismatches[:10]:
+            classes = ", ".join(f"{k} {v}" for k, v in mismatch.classifications.items())
+            out.print(
+                f"    {escape(mismatch.column)}: {mismatch.mismatch_count:,} ({escape(classes)})"
+            )
+        if check.error is not None and check.error.hint:
+            out.print(f"    [dim]hint:[/] {escape(check.error.hint)}")
+    if len(problems) > len(shown):
+        out.print(
+            f"[dim]... {len(problems) - len(shown)} more; see the reports or use --verbose.[/]"
+        )
+    counts_by_status = result.summary.checks_by_status
+    summary = ", ".join(
+        f"{counts_by_status.get(s, 0)} {s.value}" for s in Status if counts_by_status.get(s, 0)
+    )
+    score = result.summary.quality_score
+    out.print(
+        f"{_status_text(result.status)} {summary or 'no checks'}"
+        + (f"; quality score {score:.1f}" if score is not None else "")
+        + f"; {(result.duration_ms or 0) / 1000:.1f}s"
+    )
+    for artifact in artifacts:
+        out.print(f"[dim]wrote[/] {escape(_display_file(artifact.path))}")
+
+
+FailOnOption = Annotated[
+    Severity,
+    typer.Option("--fail-on", help="Exit 1 when a check at or above this severity fails."),
+]
+MinScoreOption = Annotated[
+    float | None, typer.Option("--min-score", help="Exit 1 when the quality score is below this.")
+]
+FormatsOption = Annotated[
+    list[str] | None,
+    typer.Option("--format", "-f", help="Report format (json is always written). Repeatable."),
+]
+OutputDirOption = Annotated[
+    Path | None,
+    typer.Option("--output-dir", "-o", help="Write reports here instead of reports.output_dir."),
+]
+VerboseOption = Annotated[bool, typer.Option("--verbose", "-v", help="List every problem.")]
+
+
+def _finish(result: RunResult, fail_on: Severity, strict: bool, min_score: float | None) -> None:
+    code = api.exit_code(result, fail_on=fail_on, strict=strict, min_score=min_score)
+    if code:
+        raise typer.Exit(code)
+
+
+def _execution_error(exc: DvfError) -> typer.Exit:
+    err.print(f"[red]error[/] {escape(str(exc))}")
+    hint = getattr(exc, "hint", None)
+    if hint:
+        err.print(f"    [dim]hint:[/] {escape(hint)}")
+    return typer.Exit(ExitCode.EXECUTION_ERROR)
+
+
+def _config_error(exc: ConfigError) -> typer.Exit:
+    _print_diagnostics(exc.diagnostics)
+    if not exc.diagnostics:
+        err.print(f"[red]error[/] {escape(str(exc))}")
+    return typer.Exit(ExitCode.CONFIG_ERROR)
+
+
+@app.command("run")
+def run_command(
+    ctx: typer.Context,
+    path: ConfigPath,
+    profile: ProfileOption = None,
+    set_: SetOption = None,
+    var: VarOption = None,
+    env_file: EnvFileOption = None,
+    only: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--only",
+            help="Run a subset: suite:NAME, table:GLOB, check:TYPE, tag:TAG, severity:LEVEL. Repeatable.",
+        ),
+    ] = None,
+    formats: FormatsOption = None,
+    output_dir: OutputDirOption = None,
+    run_id: Annotated[str | None, typer.Option("--run-id", help="Use this run ID.")] = None,
+    no_reports: Annotated[
+        bool, typer.Option("--no-reports", help="Do not write report files.")
+    ] = False,
+    fail_on: FailOnOption = Severity.ERROR,
+    min_score: MinScoreOption = None,
+    strict: Annotated[
+        bool, typer.Option("--strict", help="Warnings also fail the run (exit 1).")
+    ] = False,
+    verbose: VerboseOption = False,
+) -> None:
+    """Run the validations in a configuration and write reports.
+
+    Exit codes: 0 passed, 1 validation failures, 2 execution errors, 3 configuration errors.
+    """
+    try:
+        loaded = api.load_config(
+            path,
+            profile=profile,
+            overrides=set_ or [],
+            variables=_parse_vars(var),
+            env_file=env_file,
+            plugins=_state(ctx).plugins,
+        )
+        _print_diagnostics(loaded.warnings)
+        output = api.run(
+            loaded,
+            only=only or [],
+            run_id=run_id,
+            output_dir=output_dir,
+            formats=formats,
+            write_reports=not no_reports,
+        )
+    except ConfigError as exc:
+        raise _config_error(exc) from exc
+    except DvfError as exc:
+        raise _execution_error(exc) from exc
+    _print_run(output.result, output.artifacts, verbose)
+    _finish(output.result, fail_on, strict, min_score)
+
+
+@app.command("compare")
+def compare_command(
+    source: Annotated[
+        str,
+        typer.Argument(
+            help="A file path, or duckdb:///db::table, sqlite:///db::table, postgresql://...::schema.table."
+        ),
+    ],
+    target: Annotated[str, typer.Argument(help="The target, in the same forms as the source.")],
+    key: Annotated[
+        list[str] | None,
+        typer.Option("--key", "-k", help="Key column (repeat for composite keys)."),
+    ] = None,
+    strategy: Annotated[
+        list[str] | None,
+        typer.Option("--strategy", "-s", help="Comparison strategy. Repeatable."),
+    ] = None,
+    engine: Annotated[
+        str, typer.Option("--engine", help="auto, pushdown, duckdb, or polars.")
+    ] = "auto",
+    formats: FormatsOption = None,
+    output_dir: OutputDirOption = None,
+    no_reports: Annotated[
+        bool, typer.Option("--no-reports", help="Do not write report files.")
+    ] = False,
+    sample_size: Annotated[
+        int, typer.Option("--sample-size", help="Sample rows per difference.")
+    ] = 20,
+    fail_on: FailOnOption = Severity.ERROR,
+    verbose: VerboseOption = False,
+) -> None:
+    """Compare two datasets without a configuration file."""
+    default = ["row_count", "aggregate", "full_diff"] if key else ["row_count", "aggregate"]
+    try:
+        output = api.compare(
+            source,
+            target,
+            keys=key or [],
+            strategies=strategy or default,
+            engine=engine,
+            output_dir=output_dir,
+            formats=formats or ["json", "html"],
+            write_reports=not no_reports,
+            sample_size=sample_size,
+        )
+    except ConfigError as exc:
+        raise _config_error(exc) from exc
+    except DvfError as exc:
+        raise _execution_error(exc) from exc
+    _print_run(output.result, output.artifacts, verbose)
+    _finish(output.result, fail_on, False, None)
+
+
+@app.command("report")
+def report_command(
+    results: Annotated[Path, typer.Option("--from", help="A results.json written by dvf run.")],
+    formats: Annotated[
+        list[str], typer.Option("--format", "-f", help="Format to render. Repeatable.")
+    ],
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", "-o", help="Where to write the reports.")
+    ],
+    title: Annotated[str | None, typer.Option("--title", help="Report title.")] = None,
+) -> None:
+    """Re-render reports from a results document, without touching any data."""
+    from dvf.reporting.base import ReportOptions
+
+    try:
+        artifacts = api.render_reports(
+            results, formats, output_dir, options=ReportOptions(title=title)
+        )
+    except (OSError, ValueError, DvfError) as exc:
+        err.print(f"[red]error[/] {escape(str(exc))}")
+        raise typer.Exit(ExitCode.CONFIG_ERROR) from exc
+    for artifact in artifacts:
+        out.print(f"wrote {escape(_display_file(artifact.path))}")
+
+
+@app.command("init")
+def init_command(
+    directory: Annotated[Path, typer.Argument(help="Project folder to create.")] = Path(),
+    example: Annotated[
+        bool, typer.Option("--example", help="Include synthetic data with seeded discrepancies.")
+    ] = False,
+    force: Annotated[bool, typer.Option("--force", help="Overwrite an existing dvf.yaml.")] = False,
+) -> None:
+    """Create a dvf project. With --example, a runnable local demo with seeded defects."""
+    from dvf.scaffold.example import write_example, write_starter
+
+    try:
+        schema = api.config_json_schema()
+        writer = write_example if example else write_starter
+        files = writer(directory, force=force, schema=schema)
+    except DvfError as exc:
+        err.print(f"[red]error[/] {escape(str(exc))}")
+        raise typer.Exit(ExitCode.CONFIG_ERROR) from exc
+    for file in files:
+        out.print(f"created {escape(_display_file(str(file)))}")
+    config = _display_file(str(directory / "dvf.yaml"))
+    if example:
+        out.print(f"Next: [bold]dvf run {escape(config)}[/]")
+    else:
+        out.print(
+            f"Next: edit {escape(config)}, then [bold]dvf validate-config {escape(config)}[/]"
+        )
+
+
+@connections_app.command("test")
+def connections_test_command(
+    ctx: typer.Context,
+    path: ConfigPath,
+    profile: ProfileOption = None,
+    set_: SetOption = None,
+    var: VarOption = None,
+    env_file: EnvFileOption = None,
+) -> None:
+    """Open every connection in a configuration and run a trivial query."""
+    try:
+        loaded = api.load_config(
+            path,
+            profile=profile,
+            overrides=set_ or [],
+            variables=_parse_vars(var),
+            env_file=env_file,
+            plugins=_state(ctx).plugins,
+        )
+    except ConfigError as exc:
+        raise _config_error(exc) from exc
+    table = Table(title="Connections", title_justify="left")
+    for column in ("Name", "Type", "Status", "Details", "Time (ms)"):
+        table.add_column(column)
+    failed = False
+    for name, conn_config in loaded.config.connections.items():
+        entry = loaded.registry.get(PluginKind.CONNECTOR, conn_config.type)
+        if not entry.ready:
+            table.add_row(
+                escape(name),
+                conn_config.type,
+                "[dim]not available[/]",
+                "this connector is not implemented in this version",
+                "",
+            )
+            failed = True
+            continue
+        connector = entry.implementation(name, conn_config, loaded.base_dir)
+        try:
+            report = connector.test_connection()
+        finally:
+            connector.close()
+        failed |= not report.ok
+        details = report.message + (f" ({report.server_version})" if report.server_version else "")
+        table.add_row(
+            escape(name),
+            conn_config.type,
+            "[green]ok[/]" if report.ok else "[red]failed[/]",
+            escape(global_redactor().redact_text(details)),
+            f"{report.duration_ms:.0f}",
+        )
+    out.print(table)
+    if failed:
+        raise typer.Exit(ExitCode.EXECUTION_ERROR)
 
 
 def _load_cli_plugins(ctx: typer.Context, registry: Any) -> None:

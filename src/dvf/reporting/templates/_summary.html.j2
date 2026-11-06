@@ -1,0 +1,57 @@
+{% import "_macros.html.j2" as m %}
+<section id="summary" class="card">
+  <h2>Executive summary</h2>
+  <div class="kpis">
+    <div class="kpi s-{{ run.status }}"><div class="l">Overall status</div><div class="v">{{ m.badge(run.status) }}</div></div>
+    <div class="kpi"><div class="l">Quality score</div><div class="v">{{ quality_score|pct }}</div></div>
+    <div class="kpi"><div class="l">Checks</div><div class="v">{{ total_checks|count }}</div></div>
+    <div class="kpi"><div class="l">Suites</div><div class="v">{{ suite_count|count }}</div></div>
+    <div class="kpi"><div class="l">Tables</div><div class="v">{{ dataset_count|count }}</div></div>
+    <div class="kpi"><div class="l">Rows compared</div><div class="v">{{ rows_compared|count }}</div></div>
+    <div class="kpi"><div class="l">Duration</div><div class="v">{{ run.duration_ms|duration }}</div></div>
+    {% if throughput is not none %}<div class="kpi"><div class="l">Throughput</div><div class="v">{{ throughput|round|int|count }} rows/s</div></div>{% endif %}
+  </div>
+  <div class="kpis">
+    {% for status in statuses %}
+    <div class="kpi s-{{ status }}"><div class="l">{{ status }}</div><div class="v">{{ counts[status]|count }}</div></div>
+    {% endfor %}
+  </div>
+  <div class="summary-grid">
+    <div>
+      <h3>Checks by status</h3>
+      <svg class="chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}" width="{{ chart.width }}" height="{{ chart.height }}" role="img" aria-labelledby="chart-title">
+        <title id="chart-title">Checks by status</title>
+        {% for bar in chart.bars %}
+        <g transform="translate(0,{{ bar.y }})">
+          <text x="0" y="18">{{ bar.status }}</text>
+          <rect x="{{ chart.label_width }}" y="5" width="{{ bar.width }}" height="18" rx="3" class="bar-{{ bar.status }}"></rect>
+          <text x="{{ bar.text_x }}" y="18">{{ bar.count|count }}</text>
+        </g>
+        {% endfor %}
+      </svg>
+    </div>
+    <div>
+      <h3>Top issues</h3>
+      {% if top_issues %}
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>#</th><th>Status</th><th>Severity</th><th>Check</th><th>Table</th><th>Message</th><th class="num">Unexpected</th></tr></thead>
+        <tbody>
+        {% for c in top_issues %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ m.badge(c.check.status) }}</td>
+          <td><span class="sev sev-{{ c.check.severity }}">{{ c.check.severity }}</span></td>
+          <td><a href="#{{ c.anchor }}"><code>{{ c.check.check_id }}</code></a></td>
+          <td>{{ c.location }}</td>
+          <td>{{ c.headline|short }}</td>
+          <td class="num">{{ c.check.unexpected_count|count }}{% if c.check.unexpected_pct is not none %} ({{ c.check.unexpected_pct|pct }}){% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}
+      <p class="muted">No failed, errored, or warning checks.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>

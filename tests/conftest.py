@@ -69,3 +69,41 @@ suites:
         target: {table: b}
         keys: [id]
 """
+
+
+@pytest.fixture(scope="session")
+def postgres_url() -> Iterator[str]:
+    """A PostgreSQL connection URL for integration tests.
+
+    Uses ``DVF_TEST_POSTGRES_URL`` when set (CI services, or a local server), otherwise starts a
+    container with testcontainers. Skips when neither is available.
+    """
+    import os
+
+    url = os.environ.get("DVF_TEST_POSTGRES_URL")
+    if url:
+        yield url
+        return
+    import warnings
+
+    os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # testcontainers emits deprecation warnings on import
+        try:
+            from testcontainers.postgres import PostgresContainer
+        except ImportError:  # pragma: no cover - dev dependency
+            pytest.skip("testcontainers is not installed and DVF_TEST_POSTGRES_URL is not set")
+        try:
+            container = PostgresContainer("postgres:16-alpine", driver=None)
+            container.start()
+        except Exception as exc:  # no Docker, or a broken container runtime
+            pytest.skip(
+                f"PostgreSQL container could not start ({type(exc).__name__}); "
+                "set DVF_TEST_POSTGRES_URL"
+            )
+    try:
+        yield container.get_connection_url()
+    finally:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            container.stop()

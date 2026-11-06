@@ -1,0 +1,6 @@
+{% for section in extra_sections %}
+<section id="extra-{{ loop.index }}" class="card extra-section">
+  <h2>{{ section.title }}</h2>
+  <pre class="prose">{{ section.content }}</pre>
+</section>
+{% endfor %}

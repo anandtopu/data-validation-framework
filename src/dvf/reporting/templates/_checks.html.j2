@@ -1,0 +1,32 @@
+<section id="checks" class="card">
+  <h2>Checks <span class="muted">({{ checks|length|count }} shown{% if omitted_passed %}; {{ omitted_passed|count }} passed checks omitted from this list{% endif %})</span></h2>
+  <div class="toolbar" id="check-toolbar" role="search">
+    <span class="chips">
+      {% for status in statuses %}
+      {% if detail_counts[status] %}
+      <label class="chip"><input type="checkbox" class="status-filter" value="{{ status }}" checked> <span class="badge b-{{ status }}">{{ status }}</span> <span class="n">{{ detail_counts[status] }}</span></label>
+      {% endif %}
+      {% endfor %}
+    </span>
+    <input type="search" id="check-search" placeholder="Search by check, table, column, tag, owner, or message" aria-label="Search checks">
+    <label>Sort
+      <select id="check-sort" aria-label="Sort checks">
+        <option value="order">Run order</option>
+        <option value="status">Status (worst first)</option>
+        <option value="severity">Severity</option>
+        <option value="unexpected">Unexpected count</option>
+        <option value="duration">Duration</option>
+        <option value="id">Check ID</option>
+      </select>
+    </label>
+    <button type="button" id="expand-all">Expand all</button>
+    <button type="button" id="collapse-all">Collapse all</button>
+    <span id="check-counter" class="muted" aria-live="polite"></span>
+  </div>
+  <div id="check-list">
+  {% for c in checks %}
+  {% include "_check.html.j2" %}
+  {% endfor %}
+  </div>
+  {% if not checks %}<p class="muted">No checks to show.</p>{% endif %}
+</section>

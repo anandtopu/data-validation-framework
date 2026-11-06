@@ -66,6 +66,9 @@ Settings flow from `defaults` to each suite (`suites[].defaults`) and from the s
 | `plugins` | Local plugin `paths` (relative to the config) and `modules` |
 | `extends`, `profiles` | Layering, applied by the loader |
 
+!!! note "What Phase 1 applies at run time"
+    These settings are validated but not applied yet: `waivers` and `history` (Phase 2), `notifications` (Phase 4), `reports.extracts`, and `defaults.execution` parallelism and retries (Phase 2). `as_of` raises a clear error on connectors without time travel. Everything else, including `privacy`, `normalization`, `comparison`, and `reports`, takes effect. See [Checks and comparisons](validations.md) for every validation.
+
 ### Tables
 
 A table has either a `name` with `source` (and `target` in comparison suites), or a `pattern` that selects many tables by glob:

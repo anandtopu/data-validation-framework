@@ -7,6 +7,8 @@ attached as each phase lands; ``dvf plugins list`` shows which are ready.
 
 from __future__ import annotations
 
+from typing import Any
+
 from dvf.config import checks as chk
 from dvf.config import connections as conn
 from dvf.config import notifications as notif
@@ -184,3 +186,54 @@ def declare_builtins(registry: Registry) -> None:
     registry.register(PluginKind.SECRET_PROVIDER, "dotenv", DotEnvSecretProvider, origin="builtin")
     for name, (description, extra) in _SECRET_PROVIDERS_DECLARED.items():
         registry.declare(PluginKind.SECRET_PROVIDER, name, description, extra=extra)
+    _attach_implementations(registry)
+
+
+def _attach_implementations(registry: Registry) -> None:
+    """Attach the implementations that exist in this version to their declarations."""
+    from dvf.checks.quality import BUILTIN_CHECKS
+    from dvf.compare.comparators import BUILTIN_COMPARATORS
+    from dvf.connectors.duckdb import DuckDBConnector, FileConnector
+    from dvf.connectors.postgres import PostgresConnector
+    from dvf.connectors.sqlite import SQLiteConnector
+    from dvf.engines.polars_engine import PolarsEngine
+    from dvf.engines.sql_engines import AutoEngine, DuckDBEngine, PushdownEngine
+    from dvf.normalize.normalizers import BUILTIN_NORMALIZERS
+    from dvf.reporting.builtin import BUILTIN_REPORTERS
+
+    groups: list[tuple[PluginKind, dict[str, Any]]] = [
+        (
+            PluginKind.CONNECTOR,
+            {
+                "duckdb": DuckDBConnector,
+                "files": FileConnector,
+                "sqlite": SQLiteConnector,
+                "postgres": PostgresConnector,
+            },
+        ),
+        (PluginKind.CHECK, dict(BUILTIN_CHECKS)),
+        (PluginKind.COMPARATOR, dict(BUILTIN_COMPARATORS)),
+        (PluginKind.NORMALIZER, dict(BUILTIN_NORMALIZERS)),
+        (PluginKind.REPORTER, dict(BUILTIN_REPORTERS)),
+        (
+            PluginKind.ENGINE,
+            {
+                "auto": AutoEngine,
+                "pushdown": PushdownEngine,
+                "duckdb": DuckDBEngine,
+                "polars": PolarsEngine,
+            },
+        ),
+    ]
+    for kind, implementations in groups:
+        for name, implementation in implementations.items():
+            declared = registry.find(kind, name)
+            registry.register(
+                kind,
+                name,
+                implementation,
+                description=declared.description if declared else None,
+                config_model=declared.config_model if declared else None,
+                origin="builtin",
+                extra=declared.extra if declared else None,
+            )

@@ -1,0 +1,193 @@
+{% import "_macros.html.j2" as m %}
+{% set k = c.check %}
+<details class="check st-{{ k.status }}" id="{{ c.anchor }}" data-status="{{ k.status }}" data-rank="{{ c.rank }}" data-severity="{{ k.severity.rank }}" data-unexpected="{{ k.unexpected_count or 0 }}" data-duration="{{ k.duration_ms or 0 }}" data-order="{{ c.index }}" data-id="{{ k.check_id }}" data-search="{{ c.search }}">
+  <summary>
+    {{ m.badge(k.status) }}
+    <span class="sev sev-{{ k.severity }}">{{ k.severity }}</span>
+    <code class="cid" title="{{ k.check_id }}">{{ k.check_id }}</code>
+    <span class="where muted" title="{{ c.location }}">{{ c.location }}</span>
+    <span class="msg" title="{{ c.headline|short }}">{{ c.headline|short }}</span>
+    <span class="num muted">{% if k.unexpected_count is not none %}{{ k.unexpected_count|count }} unexpected{% endif %}</span>
+  </summary>
+  <div class="check-body">
+    <section>
+      <h4>Identity</h4>
+      <div class="fields">
+        {{ m.field("Check ID", k.check_id) }}
+        {{ m.field("Name", k.name) }}
+        {{ m.field("Type", k.type) }}
+        {{ m.field("Status", m.badge(k.status)) }}
+        {{ m.field("Severity", k.severity) }}
+        {{ m.field("Dimension", k.dimension) }}
+        {{ m.field("Suite", c.entry.suite.name) }}
+        {{ m.field("Table", c.entry.dataset.name) }}
+        {{ m.field("Side", k.side|fmt) }}
+        {{ m.field("Columns", k.columns|join(", ") if k.columns else none|fmt) }}
+        {{ m.field("Tags", k.tags|join(", ") if k.tags else none|fmt) }}
+        {{ m.field("Owner", k.owner|fmt) }}
+        {{ m.field("Partition", k.partition|fmt) }}
+        {{ m.field("Engine", k.engine|fmt) }}
+      </div>
+    </section>
+
+    <section>
+      <h4>Outcome</h4>
+      {% if k.message %}<p>{{ k.message|fmt }}</p>{% endif %}
+      <div class="ovse">
+        <div><h5>Observed</h5>{{ m.value(k.observed) }}</div>
+        <div><h5>Expected</h5>{{ m.value(k.expected) }}</div>
+      </div>
+      <div class="fields">
+        {{ m.field("Unexpected", k.unexpected_count|count) }}
+        {{ m.field("Total", k.total_count|count) }}
+        {{ m.field("Unexpected %", k.unexpected_pct|pct) }}
+        {{ m.field("Mostly", k.mostly|fmt) }}
+      </div>
+    </section>
+
+    {% if k.error %}
+    <section>
+      <h4>Error</h4>
+      <div class="error-box">
+        <div><strong>{{ k.error.type }}</strong>: {{ k.error.message|fmt }}</div>
+        {% if k.error.hint %}<div class="hint"><strong>Hint:</strong> {{ k.error.hint }}</div>{% endif %}
+        {% if k.error.traceback %}
+        <details class="sub"><summary>Traceback</summary><pre>{{ k.error.traceback|fmt(20000) }}</pre></details>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if k.waiver %}
+    <section>
+      <h4>Waiver</h4>
+      <div class="waiver-box">
+        <div class="fields">
+          {{ m.field("Reason", k.waiver.reason) }}
+          {{ m.field("Ticket", k.waiver.ticket|fmt) }}
+          {{ m.field("Expires", k.waiver.expires|fmt) }}
+          {{ m.field("Approved by", k.waiver.approved_by|fmt) }}
+          {{ m.field("Selector", k.waiver.selector) }}
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if k.hints %}
+    <section>
+      <h4>Hints</h4>
+      <ul class="hints">{% for hint in k.hints %}<li>{{ hint }}</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+
+    {% if k.column_mismatches %}
+    <section>
+      <h4>Column mismatches</h4>
+      <div class="table-wrap"><table class="data mismatches">
+        <thead><tr><th>Column</th><th>Source column</th><th class="num">Mismatches</th><th class="num">%</th><th>Classification</th><th>Hints</th></tr></thead>
+        <tbody>
+        {% for mm in k.column_mismatches %}
+        <tr>
+          <td><code>{{ mm.column }}</code></td>
+          <td>{{ mm.source_column|fmt }}</td>
+          <td class="num">{{ mm.mismatch_count|count }}</td>
+          <td class="num">{{ mm.mismatch_pct|pct }}</td>
+          <td>{% for name, n in mm.classifications|classes %}<span class="tag cls">{{ name }}: {{ n|count }}</span>{% endfor %}</td>
+          <td>{% for hint in mm.hints %}<div>{{ hint }}</div>{% endfor %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% for mm in k.column_mismatches if mm.samples %}
+      <details class="sub"><summary>Side-by-side samples for {{ mm.column }} ({{ mm.samples.rows|length }} rows)</summary>
+        {{ m.sample_table(mm.samples, max_samples) }}
+      </details>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if k.metrics %}
+    <section>
+      <h4>Metric comparisons</h4>
+      <div class="table-wrap"><table class="data metrics">
+        <thead><tr><th>Metric</th><th>Column</th><th>Group</th><th class="num">Source</th><th class="num">Target</th><th class="num">Difference</th><th class="num">Tolerance</th><th>Result</th><th>Note</th></tr></thead>
+        <tbody>
+        {% for mt in k.metrics %}
+        <tr{% if not mt.passed %} class="hl"{% endif %}>
+          <td>{{ mt.metric }}</td>
+          <td>{{ mt.column|fmt }}{% if mt.source_column and mt.source_column != mt.column %} <span class="muted">← {{ mt.source_column }}</span>{% endif %}</td>
+          <td>{{ mt.group|group }}</td>
+          <td class="num">{{ mt.source|fmt(200) }}</td>
+          <td class="num">{{ mt.target|fmt(200) }}</td>
+          <td class="num">{{ mt.difference|fmt }}</td>
+          <td class="num">{{ mt.tolerance|fmt }}</td>
+          <td>{% if mt.passed %}<span class="ok">pass</span>{% else %}<span class="bad">fail</span>{% endif %}</td>
+          <td>{{ mt.note|fmt }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </section>
+    {% endif %}
+
+    {% if k.samples %}
+    <section>
+      <h4>Samples</h4>
+      {{ m.sample_table(k.samples, max_samples) }}
+    </section>
+    {% endif %}
+
+    {% if k.queries or k.normalization %}
+    <section>
+      <h4>Reproduce</h4>
+      {% for q in k.queries %}
+      <div class="query">
+        <div class="qmeta"><span class="tag">{{ q.side }}</span> dialect {{ q.dialect|fmt }} · engine {{ q.engine|fmt }} · {{ q.duration_ms|duration }} · rows returned {{ q.rows_returned|count }}</div>
+        <pre><code>{{ q.sql|fmt(20000) }}</code></pre>
+        {% if q.parameters %}<details class="sub"><summary>Parameters</summary>{{ m.kv(q.parameters) }}</details>{% endif %}
+      </div>
+      {% endfor %}
+      {% if k.normalization %}
+      <h5>Normalization pipeline</h5>
+      <ol>{% for step in k.normalization %}<li><code>{{ step }}</code></li>{% endfor %}</ol>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <section>
+      <h4>Timing</h4>
+      <div class="fields">
+        {{ m.field("Started", k.started_at|dt) }}
+        {{ m.field("Ended", k.ended_at|dt) }}
+        {{ m.field("Duration", k.duration_ms|duration) }}
+      </div>
+      {% if k.timing %}{{ m.timing_table(k.timing, timing_fields) }}{% endif %}
+    </section>
+
+    {% if k.artifacts %}
+    <section>
+      <h4>Artifacts</h4>
+      <ul>
+      {% for a in k.artifacts %}
+      {% set target = a.path|href %}
+      <li><span class="tag">{{ a.kind }}</span> {% if target %}<a href="{{ target }}">{{ a.path }}</a>{% else %}<code>{{ a.path }}</code>{% endif %}{% if a.format %} <span class="muted">{{ a.format }}</span>{% endif %}{% if a.rows is not none %} <span class="muted">· {{ a.rows|count }} rows</span>{% endif %}</li>
+      {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if k.details %}
+    <section>
+      <h4>Details</h4>
+      {{ m.kv(k.details) }}
+    </section>
+    {% endif %}
+
+    {% if k.metadata %}
+    <section>
+      <h4>Metadata</h4>
+      {{ m.kv(k.metadata) }}
+    </section>
+    {% endif %}
+  </div>
+</details>

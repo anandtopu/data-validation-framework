@@ -1,0 +1,42 @@
+{
+  "customers": {
+    "missing_in_target": 3,
+    "extra_in_target": 2,
+    "duplicate_keys_target": 2,
+    "mismatched_rows": 24,
+    "column_classifications": {
+      "customer_code": {
+        "leading_zeros": 3
+      },
+      "city": {
+        "whitespace_only": 4
+      },
+      "last_name": {
+        "case_only": 3,
+        "encoding": 2
+      },
+      "balance": {
+        "numeric_rounding": 3
+      },
+      "first_name": {
+        "string_truncation": 2
+      },
+      "created_at": {
+        "timezone_shift": 3
+      },
+      "email": {
+        "null_vs_value": 2
+      },
+      "status": {
+        "value_changed": 2
+      }
+    },
+    "type_changes": [
+      "quantity"
+    ]
+  },
+  "orders": {
+    "extra_in_target": 3,
+    "orphans": 3
+  }
+}

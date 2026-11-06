@@ -12,6 +12,7 @@ from dvf.core.errors import PluginError, UnknownPluginError
 from dvf.plugins import (
     Check,
     CheckConfig,
+    Connector,
     Dimension,
     PluginKind,
     Registry,
@@ -33,7 +34,8 @@ class _MyCheck(Check):
 
 
 def test_builtins_are_declared(registry: Registry) -> None:
-    entry = registry.get(PluginKind.CHECK, "not_null")
+    assert registry.get(PluginKind.CHECK, "not_null").status == "ready"
+    entry = registry.get(PluginKind.CONNECTOR, "snowflake")
     assert entry.status == "declared"
     assert entry.config_model is not None
     assert entry.origin == "builtin"
@@ -85,13 +87,14 @@ def test_duplicates_are_errors_unless_same_object_or_replaced(registry: Registry
 
 
 def test_builtin_implementation_attaches_to_declaration(registry: Registry) -> None:
-    class NotNull(Check):
+    class MySql(Connector):
         pass
 
-    entry = registry.register(PluginKind.CHECK, "not_null", NotNull, origin="builtin")
+    assert not registry.get(PluginKind.CONNECTOR, "mysql").ready
+    entry = registry.register(PluginKind.CONNECTOR, "mysql", MySql, origin="builtin")
     assert entry.ready
     assert entry.config_model is not None  # kept from the declaration
-    assert entry.description.startswith("Columns must not contain NULL")
+    assert entry.description.startswith("MySQL")
 
 
 def test_config_model_must_subclass_base(registry: Registry) -> None:

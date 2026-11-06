@@ -16,6 +16,7 @@ Example::
 
 from __future__ import annotations
 
+from dvf.checks.context import CheckContext, CheckOutcome
 from dvf.config.checks import CheckConfig
 from dvf.config.connections import ConnectionConfig
 from dvf.config.notifications import NotificationConfig
@@ -24,10 +25,13 @@ from dvf.plugins.base import (
     Check,
     Comparator,
     Component,
+    ConnectionReport,
     Connector,
     Normalizer,
     Notifier,
+    Relation,
     Reporter,
+    RowCheck,
 )
 from dvf.plugins.decorators import (
     register,
@@ -52,15 +56,19 @@ from dvf.plugins.registry import (
     get_registry,
     new_registry,
 )
+from dvf.reporting.base import ReportOptions, ReportSection
 from dvf.security.secrets import SecretContext, SecretProvider, SecretRef
 
 __all__ = [
     "PLUGIN_API_VERSION",
     "Check",
     "CheckConfig",
+    "CheckContext",
+    "CheckOutcome",
     "Comparator",
     "Component",
     "ConnectionConfig",
+    "ConnectionReport",
     "Connector",
     "Dimension",
     "Normalizer",
@@ -70,7 +78,11 @@ __all__ = [
     "PluginKind",
     "PluginLoadFailure",
     "Registry",
+    "Relation",
+    "ReportOptions",
+    "ReportSection",
     "Reporter",
+    "RowCheck",
     "SecretContext",
     "SecretProvider",
     "SecretRef",

@@ -8,12 +8,12 @@ Significant decisions are recorded as ADRs in [docs/adr](docs/adr/README.md). Th
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Foundations: config system, canonical types, result model, plugin registry, hooks, secrets, CLI skeleton, CI | **Done** |
-| 1 | Local MVP: DuckDB, SQLite, PostgreSQL, files; core checks and comparisons; JSON, HTML, JUnit, Markdown reports | Next |
-| 2 | Scale and debugging: bucketed hashing, bisection, parallel executor, classifier, history, waivers at run time | Planned |
+| 1 | Local MVP: DuckDB, SQLite, PostgreSQL, files; core checks and comparisons; JSON, HTML, JUnit, Markdown reports | **Done** |
+| 2 | Scale and debugging: bucketed hashing, bisection, parallel executor, explain/trace/debug, history, waivers at run time | Next |
 | 3 | Spark, lakehouse formats, NoSQL, SAP, migration validations, discovery and mapping import | Planned |
 | 4 | Integrations, containers, docs site, 1.0 release | Planned |
 
-In Phase 0 nothing reads or compares data yet. The configuration contract, the plugin system, and the result model are in place so that Phase 1 can add execution without changing them.
+Phase 1 executes configurations end to end on the local machine. The execution model is recorded in [ADR 0007](docs/adr/0007-phase1-execution-model.md); the mismatch classifier moved forward from Phase 2 because Phase 1's acceptance requires it.
 
 ## Design principles
 
@@ -52,14 +52,14 @@ flowchart LR
 | Plugins | `dvf.plugins` | 0 | Registry, entry-point discovery, local plugin loading, pluggy hooks, built-in declarations |
 | Security | `dvf.security` | 0 | Secret providers, secret references, redaction |
 | Observability | `dvf.observability` | 0 | Logging configuration, JSON logs, redaction filter |
-| Planning | `dvf.planning` | 1 | Discovery, expansion of patterns, selectors, partitioning, task DAG |
-| Execution | `dvf.execution` | 1–2 | Executors, checkpoints, retries, throttling |
-| Engines | `dvf.engines` | 1–3 | SQL pushdown (sqlglot), DuckDB, Polars, Spark |
-| Connectors | `dvf.connectors` | 1–3 | Database, warehouse, file, NoSQL, and SAP adapters |
-| Normalization | `dvf.normalize` | 1 | Canonicalization with SQL, Polars, and Spark implementations |
-| Comparison | `dvf.compare` | 1–2 | Row count, aggregate, profile, row hash, hash bucket, bisect, full diff, sample |
-| Checks | `dvf.checks` | 1 | Schema, quality, reconciliation, and migration checks |
-| Reporting | `dvf.reporting` | 1–2 | JSON, HTML, JUnit, Markdown, Excel, extracts, sinks |
+| Planning | `dvf.compare.plan`, `dvf.execution.selectors` | 1 | Column pairing (keys, mappings, renames, include and exclude), comparison plans, pattern expansion, `--only` selectors; discovery and partitioning arrive in Phases 2 and 3 |
+| Execution | `dvf.execution` | 1–2 | Sequential runner with error containment, run context, query recording, hooks (Phase 1); parallel executor, checkpoints, retries (Phase 2) |
+| Engines | `dvf.engines` | 1–3 | Row-level diff: `pushdown`, `duckdb`, `polars`, `auto` (Phase 1); Spark (Phase 3) |
+| Connectors | `dvf.connectors` | 1–3 | DuckDB, SQLite, PostgreSQL, files (Phase 1); warehouses (Phase 2); NoSQL and SAP (Phase 3) |
+| Normalization | `dvf.normalize` | 1 | Canonicalization (Python reference, SQL per dialect, Polars) and normalizers |
+| Comparison | `dvf.compare` | 1–2 | Row count, aggregate, profile, row hash, full diff, mismatch classifier (Phase 1); hash bucket, bisect, sample (Phase 2) |
+| Checks | `dvf.checks` | 1–3 | Schema checks SCH-01 to SCH-06 and data quality checks (Phase 1); migration checks (Phase 3) |
+| Reporting | `dvf.reporting` | 1–2 | JSON, HTML, JUnit, Markdown (Phase 1); Excel, extracts, sinks (Phase 2) |
 | Debugging | `dvf.debug` | 2 | Mismatch classifier, repro artifacts, row trace |
 | History | `dvf.history` | 2 | Run store, baselines, waivers |
 
@@ -87,7 +87,7 @@ Lists replace lists when layers merge; mappings merge key by key.
 
 The registry stores entries of a given kind: `connector`, `check`, `comparator`, `normalizer`, `reporter`, `notifier`, `secret_provider`, `engine`, `sink`.
 
-- **Built-in declarations.** In Phase 0, built-in components are *declared*: their names, descriptions, and config models are registered so configurations validate and the JSON Schema is complete. An entry is *ready* once an implementation class is attached; `dvf plugins list` shows which is which.
+- **Built-in declarations.** Built-in components that are not implemented yet are *declared*: their names, descriptions, and config models are registered so configurations validate and the JSON Schema is complete. An entry is *ready* once an implementation class is attached; `dvf plugins list` shows which is which.
 - **Entry points.** Installed packages contribute components through the groups `dvf.connectors`, `dvf.checks`, `dvf.comparators`, `dvf.normalizers`, `dvf.reporters`, `dvf.notifiers`, `dvf.secret_providers`, `dvf.engines`, and `dvf.sinks`. Hooks use `dvf.hooks`.
 - **Local plugins.** A project can load Python files or folders through `plugins.paths`, or modules through `plugins.modules`. Decorators such as `@register_check("acme.vat_number_valid")` register components on import.
 - **Compatibility.** A plugin may declare `dvf_plugin_api = ">=0.1,<0.2"`. The registry refuses incompatible plugins and reports why.
@@ -96,6 +96,28 @@ The registry stores entries of a given kind: `connector`, `check`, `comparator`,
 ## Result model
 
 `RunResult` → `SuiteResult` → `DatasetPairResult` → `CheckResult`, defined in `dvf.models.results` and exported as JSON Schema in [schemas/results.schema.json](schemas/results.schema.json). The schema version is independent of the package version and follows SemVer. Every reporter in Phase 1 onward renders from this model.
+
+## Execution flow (Phase 1)
+
+```mermaid
+flowchart TB
+  CFG[LoadedConfig] --> RUN[Runner]
+  RUN --> TBL[Per table: resolve datasets, read schemas]
+  TBL --> PAIR[Pair columns: keys, mappings, renames]
+  PAIR --> SCH[Schema checks SCH-01..06]
+  PAIR --> PLAN[Comparison plan: normalizers + canonical SQL per side]
+  PLAN --> AGG[row_count / aggregate / profile: pushed down to each side]
+  PLAN --> DIFF[row_hash / full_diff: engine pushdown, duckdb, or polars]
+  DIFF --> CLS[Mismatch classifier and hints]
+  TBL --> DQ[Data quality checks: SQL on the checked side]
+  SCH & AGG & CLS & DQ --> RES[CheckResult with evidence, SQL, timing]
+  RES --> REP[Reports: JSON always, plus HTML, JUnit, Markdown]
+```
+
+1. **Pairing.** `pair_columns` matches source and target columns using key mappings, explicit `columns.mappings` (including `source_expr` derivations), and name matching (`exact` or `case_insensitive`), honoring `include` and `exclude`. Schema checks and comparisons share it, so a renamed column is never reported as missing.
+2. **Canonicalization.** Each paired column gets a canonical form chosen from both sides' types (`resolve_pair`), rendered as SQL in each side's dialect. The Python reference in `dvf.normalize.canonical` defines the rules; parity tests hold every implementation to it.
+3. **Comparisons** escalate: strategies run in order, and `on_mismatch` runs only when one fails. Counts, control totals, and profiles are pushed down to each database. Row-level strategies hand a projection of each side to the configured engine.
+4. **Error containment.** Each check runs in an error boundary; failures become `error` results with hints and redacted tracebacks, and the run continues. Results JSON is always written, and every other report renders from it.
 
 ## Canonical type system
 
@@ -111,7 +133,7 @@ The registry stores entries of a given kind: `connector`, `check`, `comparator`,
 
 ```
 src/dvf/          package (see the layer table)
-tests/            unit tests; integration, parity, e2e, and benchmarks arrive with Phase 1
+tests/            unit/, parity/ (cross-engine canonicalization), e2e/ (seeded defects); benchmarks arrive with Phase 2
 examples/         runnable configuration examples
 schemas/          generated JSON Schemas for configuration and results
 docs/             MkDocs site and ADRs

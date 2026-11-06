@@ -1,0 +1,30 @@
+{% import "_macros.html.j2" as m %}
+<header class="top">
+  <div class="brand">
+    {% if logo %}<img class="logo" src="{{ logo }}" alt="Logo">{% endif %}
+    <div>
+      <h1>{{ title }}</h1>
+      <div class="sub">Project {{ run.project }} · data validation report</div>
+    </div>
+    {{ m.badge(run.status) }}
+  </div>
+  <div class="meta">
+    <div><span class="k">Run ID</span><span class="mono">{{ run.run_id }}</span></div>
+    <div><span class="k">Status</span>{{ run.status }}</div>
+    <div><span class="k">Started</span>{{ run.started_at|dt }}</div>
+    {% if run.ended_at %}<div><span class="k">Ended</span>{{ run.ended_at|dt }}</div>{% endif %}
+    <div><span class="k">Duration</span>{{ run.duration_ms|duration }}</div>
+    {% if env.profile %}<div><span class="k">Profile</span>{{ env.profile }}</div>{% endif %}
+    {% if env.git_sha %}<div><span class="k">Git SHA</span><span class="mono">{{ env.git_sha }}</span></div>{% endif %}
+    {% for key, v in header_meta %}
+    <div><span class="k">{{ key }}</span>{{ v|fmt(200) }}</div>
+    {% endfor %}
+  </div>
+</header>
+<nav class="toc" aria-label="Sections">
+  <a href="#summary">Summary</a>
+  <a href="#tables">Tables</a>
+  <a href="#checks">Checks</a>
+  {% for section in extra_sections %}<a href="#extra-{{ loop.index }}">{{ section.title }}</a>{% endfor %}
+  <a href="#reproducibility">Reproducibility</a>
+</nav>

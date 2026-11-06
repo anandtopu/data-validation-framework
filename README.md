@@ -4,20 +4,35 @@
 
 `dvf` validates schemas and data quality, reconciles source and target datasets at scale, and produces detailed, auditable reports. It is built for migration projects (SAP, on-premise databases to cloud warehouses, SQL to NoSQL) and for data engineering pipelines (PySpark, Databricks, Parquet, Avro, JSON, CSV).
 
-> **Project status: Phase 0 (foundations), pre-alpha.**
-> The configuration system, canonical type system, result model, plugin registry, and CLI skeleton are in place.
-> **No data is read or compared yet.** Connectors, checks, comparisons, and reports arrive in Phase 1.
+> **Project status: Phase 1 (local MVP), pre-alpha.**
+> dvf reads, checks, and compares data from DuckDB, SQLite, PostgreSQL, and CSV, Parquet, and JSON files, and writes HTML, JSON, JUnit, and Markdown reports.
+> Scale features (bucketed hashing, parallel execution, history, waivers at run time) arrive in Phase 2; Spark, SAP, and NoSQL in Phase 3.
 > See [ARCHITECTURE.md](ARCHITECTURE.md) for the roadmap and [BUILD_PROMPT.md](BUILD_PROMPT.md) for the full specification.
 
 ## What works today
 
 | Command | What it does |
 |---|---|
-| `dvf --version` / `dvf version` | Shows the version, plus Python, platform, schema, and plugin API versions |
-| `dvf validate-config <file>` | Loads and validates a configuration, reporting errors with file, line, and column |
-| `dvf config show <file>` | Prints the fully resolved configuration (layers, profiles, inheritance applied), with secrets redacted |
+| `dvf init <dir> --example` | Creates a runnable local project with synthetic data and seeded discrepancies |
+| `dvf run <file>` | Runs schema checks, comparisons, and data quality checks, and writes reports |
+| `dvf compare <source> <target> -k <key>` | Compares two datasets without a configuration file |
+| `dvf report --from results.json -f html -o <dir>` | Re-renders reports from a results document, without touching data |
+| `dvf connections test <file>` | Opens every connection and runs a trivial query |
+| `dvf validate-config <file>` | Validates a configuration, reporting errors with file, line, and column |
+| `dvf config show <file>` | Prints the fully resolved configuration, with secrets redacted |
 | `dvf schema config` / `dvf schema results` | Exports JSON Schemas for IDE autocomplete and integrations |
-| `dvf plugins list` | Lists registered connectors, checks, comparators, normalizers, reporters, notifiers, engines, and secret providers, with their status |
+| `dvf plugins list` | Lists components and whether each is `ready` or `declared` (planned) |
+
+| Area | Ready in Phase 1 |
+|---|---|
+| Connectors | `duckdb`, `sqlite`, `postgres` (`pip install 'dvf[postgres]'`), `files` (CSV, TSV, Parquet, JSON, NDJSON) |
+| Engines | `auto`, `pushdown` (diff inside one database), `duckdb` (local, spills to disk), `polars` (`dvf[polars]`) |
+| Schema checks | Object existence, column presence, type compatibility, length and precision, nullability, constraints (SCH-01 to SCH-06) |
+| Data quality checks | `not_null`, `not_blank`, `null_ratio`, `unique`, `regex`, `allowed_values`, `range`, `length`, `referential_integrity`, `custom_sql`, `expression`, `row_count_range`, `freshness` |
+| Comparisons | `row_count` (grouped too), `aggregate` control totals, `profile`, `row_hash`, `full_diff` with mismatch classification and fix hints |
+| Reports | Self-contained HTML, canonical JSON, JUnit XML, Markdown |
+
+Exit codes: `0` passed, `1` validation failures (at or above `--fail-on`, or below `--min-score`), `2` execution errors, `3` configuration errors.
 
 ## Quickstart (from source)
 
@@ -36,12 +51,14 @@ uv sync
 ```
 
 ```bash
-uv run dvf validate-config examples/local_files/dvf.yaml
+uv run dvf init demo --example
 ```
 
 ```bash
-uv run dvf plugins list
+uv run dvf run demo/dvf.yaml
 ```
+
+The run finds the seeded defects (exit code 1) and writes `report.html`, `results.json`, `junit.xml`, and `summary.md` under `demo/reports/`. Each mismatched column is classified, for example as `whitespace_only`, `numeric_rounding`, or `timezone_shift`, with a suggested fix.
 
 ## Configuration at a glance
 
