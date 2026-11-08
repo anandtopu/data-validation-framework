@@ -18,7 +18,7 @@ from dvf.core.datasets import DatasetRef
 from dvf.core.enums import Dimension, Severity, Side, Status
 from dvf.core.types import CanonicalType, Compatibility
 
-RESULTS_SCHEMA_VERSION = "1.0.0"
+RESULTS_SCHEMA_VERSION = "1.1.0"
 """SemVer of the results document. Independent of the package version."""
 
 _ID_SEGMENT = re.compile(r"[^A-Za-z0-9_+\-]+")
@@ -61,13 +61,16 @@ class ErrorInfo(_Model):
 
 
 class WaiverApplied(_Model):
-    """A waiver that turned a failure into an accepted difference."""
+    """A waiver that matched a check: it turned a failure into an accepted difference, or it has
+    expired and the failure stands."""
 
     selector: str
+    column: str | None = None
     reason: str
     ticket: str | None = None
     expires: str | None = None
     approved_by: str | None = None
+    expired: bool = False
 
 
 class SampleSet(_Model):
@@ -101,6 +104,7 @@ class ColumnMismatch(_Model):
     )
     hints: list[str] = Field(default_factory=list)
     samples: SampleSet | None = None
+    waived: bool = Field(default=False, description="An active waiver covers this column.")
 
 
 class MetricComparison(_Model):
@@ -279,6 +283,44 @@ class RunEnvironment(_Model):
     )
 
 
+class WaiverStatus(_Model):
+    """How one configured waiver was used in a run."""
+
+    selector: str
+    column: str | None = None
+    reason: str
+    ticket: str | None = None
+    approved_by: str | None = None
+    expires: str | None = None
+    status: str = Field(description="'applied', 'expired', or 'unused'.")
+    checks: list[str] = Field(default_factory=list, description="IDs of the checks it matched.")
+
+
+class BaselineComparison(_Model):
+    """Failures compared with a baseline run (run-to-run diff)."""
+
+    baseline_run_id: str
+    baseline_started_at: datetime | None = None
+    policy: str = Field(description="'last_run', 'last_passed', or an explicit run ID.")
+    new_failures: list[str] = Field(default_factory=list, description="Check IDs failing now only.")
+    resolved: list[str] = Field(
+        default_factory=list, description="Check IDs that failed before only."
+    )
+    persisting: list[str] = Field(default_factory=list, description="Check IDs failing in both.")
+
+
+class TrendPoint(_Model):
+    """One earlier run of the same project, for trends."""
+
+    run_id: str
+    started_at: datetime
+    status: Status
+    quality_score: float | None = None
+    checks: int = 0
+    failed: int = 0
+    errors: int = 0
+
+
 class RunSummary(_Model):
     checks_by_status: dict[Status, int] = Field(default_factory=dict)
     suites: int = 0
@@ -306,6 +348,17 @@ class RunResult(_Model):
         default_factory=dict, description="Resolved configuration with secrets redacted."
     )
     metadata: dict[str, Any] = Field(default_factory=dict)
+    waivers: list[WaiverStatus] = Field(default_factory=list)
+    baseline: BaselineComparison | None = None
+    trend: list[TrendPoint] = Field(
+        default_factory=list, description="Earlier runs of this project, oldest first."
+    )
+    interrupted: bool = Field(
+        default=False, description="The run stopped early; resume it with 'dvf run --resume'."
+    )
+    resumed_from_checkpoint: bool = Field(
+        default=False, description="Some tables were loaded from this run's checkpoints."
+    )
 
     def iter_checks(self) -> Iterable[CheckResult]:
         for suite in self.suites:

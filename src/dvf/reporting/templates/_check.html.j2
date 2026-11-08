@@ -6,7 +6,7 @@
     <span class="sev sev-{{ k.severity }}">{{ k.severity }}</span>
     <code class="cid" title="{{ k.check_id }}">{{ k.check_id }}</code>
     <span class="where muted" title="{{ c.location }}">{{ c.location }}</span>
-    <span class="msg" title="{{ c.headline|short }}">{{ c.headline|short }}</span>
+    <span class="msg" title="{{ c.headline|short }}">{{ m.baseline_tag(c.baseline) }}{% if k.waiver and k.waiver.expired %}<span class="tag tag-expired">waiver expired</span>{% endif %}{% if c.baseline or (k.waiver and k.waiver.expired) %} {% endif %}{{ c.headline|short }}</span>
     <span class="num muted">{% if k.unexpected_count is not none %}{{ k.unexpected_count|count }} unexpected{% endif %}</span>
   </summary>
   <div class="check-body">
@@ -27,6 +27,7 @@
         {{ m.field("Owner", k.owner|fmt) }}
         {{ m.field("Partition", k.partition|fmt) }}
         {{ m.field("Engine", k.engine|fmt) }}
+        {% if c.baseline %}{{ m.field("Baseline", m.baseline_tag(c.baseline)) }}{% endif %}
       </div>
     </section>
 
@@ -59,15 +60,18 @@
     {% endif %}
 
     {% if k.waiver %}
+    {% set w = k.waiver %}
     <section>
-      <h4>Waiver</h4>
-      <div class="waiver-box">
+      <h4>Waiver{% if w.expired %} <span class="badge b-failed">expired</span>{% endif %}</h4>
+      <div class="waiver-box{% if w.expired %} expired{% endif %}">
+        {% if w.expired %}<p><strong>This waiver expired{% if w.expires %} on {{ w.expires }}{% endif %}; the failure stands until the waiver is renewed or removed.</strong></p>{% endif %}
         <div class="fields">
-          {{ m.field("Reason", k.waiver.reason) }}
-          {{ m.field("Ticket", k.waiver.ticket|fmt) }}
-          {{ m.field("Expires", k.waiver.expires|fmt) }}
-          {{ m.field("Approved by", k.waiver.approved_by|fmt) }}
-          {{ m.field("Selector", k.waiver.selector) }}
+          {{ m.field("Reason", w.reason) }}
+          {{ m.field("Ticket", w.ticket|fmt) }}
+          {{ m.field("Expires", w.expires|fmt) }}
+          {{ m.field("Approved by", w.approved_by|fmt) }}
+          {{ m.field("Selector", w.selector) }}
+          {% if w.column %}{{ m.field("Column", w.column) }}{% endif %}
         </div>
       </div>
     </section>
@@ -87,8 +91,8 @@
         <thead><tr><th>Column</th><th>Source column</th><th class="num">Mismatches</th><th class="num">%</th><th>Classification</th><th>Hints</th></tr></thead>
         <tbody>
         {% for mm in k.column_mismatches %}
-        <tr>
-          <td><code>{{ mm.column }}</code></td>
+        <tr{% if mm.waived %} class="waived"{% endif %}>
+          <td><code>{{ mm.column }}</code>{% if mm.waived %} <span class="badge b-waived">waived</span>{% endif %}</td>
           <td>{{ mm.source_column|fmt }}</td>
           <td class="num">{{ mm.mismatch_count|count }}</td>
           <td class="num">{{ mm.mismatch_pct|pct }}</td>
@@ -103,6 +107,31 @@
         {{ m.sample_table(mm.samples, max_samples) }}
       </details>
       {% endfor %}
+    </section>
+    {% endif %}
+
+    {% set parts = c.partitions %}
+    {% if parts %}
+    {% set failing = parts.failing() %}
+    <section>
+      <h4>Partitions <span class="muted">({{ parts.rows|length|count }} partition{{ '' if parts.rows|length == 1 else 's' }}{% if failing %}, {{ failing|length|count }} failing{% endif %})</span></h4>
+      <div class="table-wrap"><table class="data partitions">
+        <thead><tr>{% for key, label in parts.columns %}<th{% if key not in ('name', 'status') %} class="num"{% endif %}>{{ label }}</th>{% endfor %}</tr></thead>
+        <tbody>
+        {% for row in parts.rows[:max_partitions] %}
+        {% set st = row.get('status') %}
+        <tr{% if st is not none and st|string not in ('passed', 'skipped', 'waived') %} class="hl"{% endif %}>
+          {% for key, _label in parts.columns %}
+          {% if key == 'status' %}<td>{% if st is not none %}{{ m.badge(st) }}{% else %}{{ none|fmt }}{% endif %}</td>
+          {% elif key == 'name' %}<td><code>{{ row.get(key)|fmt(200) }}</code></td>
+          {% else %}<td class="num">{% if row.get(key) is number %}{{ row.get(key)|count }}{% else %}{{ row.get(key)|fmt(200) }}{% endif %}</td>
+          {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% if parts.rows|length > max_partitions %}<p class="note">Showing {{ max_partitions|count }} of {{ parts.rows|length|count }} partitions; the JSON report has all of them.</p>{% endif %}
     </section>
     {% endif %}
 
@@ -166,20 +195,21 @@
 
     {% if k.artifacts %}
     <section>
-      <h4>Artifacts</h4>
-      <ul>
+      <h4>Artifacts <span class="muted">(paths are relative to this report)</span></h4>
+      <ul class="artifacts">
       {% for a in k.artifacts %}
       {% set target = a.path|href %}
-      <li><span class="tag">{{ a.kind }}</span> {% if target %}<a href="{{ target }}">{{ a.path }}</a>{% else %}<code>{{ a.path }}</code>{% endif %}{% if a.format %} <span class="muted">{{ a.format }}</span>{% endif %}{% if a.rows is not none %} <span class="muted">· {{ a.rows|count }} rows</span>{% endif %}</li>
+      <li><span class="tag" title="{{ a.kind }}">{{ a.kind|artifact_label }}</span> {% if target %}<a href="{{ target }}">{{ a.path }}</a>{% else %}<code>{{ a.path }}</code>{% endif %}{% if a.format %} <span class="muted">{{ a.format }}</span>{% endif %}{% if a.rows is not none %} <span class="muted">· {{ a.rows|count }} rows</span>{% endif %}</li>
       {% endfor %}
       </ul>
     </section>
     {% endif %}
 
-    {% if k.details %}
+    {% set extra = c.extra_details %}
+    {% if extra %}
     <section>
       <h4>Details</h4>
-      {{ m.kv(k.details) }}
+      {{ m.kv(extra) }}
     </section>
     {% endif %}
 

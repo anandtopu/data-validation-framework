@@ -23,6 +23,9 @@
 </header>
 <nav class="toc" aria-label="Sections">
   <a href="#summary">Summary</a>
+  {% if baseline_view %}<a href="#baseline">Baseline</a>{% endif %}
+  {% if trend %}<a href="#trend">Trend</a>{% endif %}
+  {% if waivers %}<a href="#waivers">Waivers</a>{% endif %}
   <a href="#tables">Tables</a>
   <a href="#checks">Checks</a>
   {% for section in extra_sections %}<a href="#extra-{{ loop.index }}">{{ section.title }}</a>{% endfor %}

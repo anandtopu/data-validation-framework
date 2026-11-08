@@ -96,9 +96,9 @@
           <tbody>
           {% for row in dv.mismatches %}
           {% set mm = row.mismatch %}
-          <tr>
+          <tr{% if mm.waived %} class="waived"{% endif %}>
             <td>{% if row.view.included %}<a href="#{{ row.view.anchor }}"><code>{{ row.view.check.check_id }}</code></a>{% else %}<code>{{ row.view.check.check_id }}</code>{% endif %}</td>
-            <td><code>{{ mm.column }}</code>{% if mm.source_column and mm.source_column != mm.column %} <span class="muted">← {{ mm.source_column }}</span>{% endif %}</td>
+            <td><code>{{ mm.column }}</code>{% if mm.source_column and mm.source_column != mm.column %} <span class="muted">← {{ mm.source_column }}</span>{% endif %}{% if mm.waived %} <span class="badge b-waived">waived</span>{% endif %}</td>
             <td class="num">{{ mm.mismatch_count|count }}</td>
             <td class="num">{{ mm.mismatch_pct|pct }}</td>
             <td>{% for name, n in mm.classifications|classes %}<span class="tag cls">{{ name }}: {{ n|count }}</span>{% endfor %}</td>

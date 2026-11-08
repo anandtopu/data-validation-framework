@@ -58,6 +58,9 @@ class CheckOutcome:
     dimension: Dimension | None = None
     severity_cap: str | None = None
     """Highest severity this outcome may carry (``warning`` for informational comparisons)."""
+    extract: pa.Table | None = None
+    """Failing rows or mismatched values beyond the samples (masked, text), written as an extract
+    file when extracts are enabled. Not part of the results document."""
 
 
 def pct(part: int, whole: int) -> float | None:
@@ -104,6 +107,8 @@ class CheckContext:
         self.privacy = privacy
         self.normalization = normalization
         self.recorder = QueryRecorder()
+        self.extract_rows = 0
+        """Failing rows to capture for an extract file (0: samples only). Set by the runner."""
 
     # ------------------------------------------------------------------ SQL helpers
     @property
@@ -199,6 +204,31 @@ class CheckContext:
             truncated=len(rows) >= self.sample_size,
         )
 
+    def evidence(self, sql: str) -> tuple[SampleSet | None, pa.Table | None]:
+        """Masked samples and, when extracts are enabled, a larger masked extract, from one query
+        of failing rows (``sql`` is unlimited; dvf adds the limit)."""
+        limit = max(self.sample_size, self.extract_rows)
+        if limit <= 0 or self.privacy.strict:
+            return None, None
+        table = self.query(self.dialect.limit(sql, limit))
+        columns = list(table.column_names)
+        rows = [list(r.values()) for r in table.to_pylist()]
+        masked = self.privacy.mask_rows(columns, rows)
+        samples = None
+        if self.sample_size > 0:
+            samples = SampleSet(
+                columns=columns,
+                rows=masked[: self.sample_size],
+                masked=self.privacy.mask_pii,
+                truncated=len(rows) >= self.sample_size,
+            )
+        extract = None
+        if self.extract_rows > 0 and len(rows) > self.sample_size:
+            from dvf.execution.artifacts import text_table
+
+            extract = text_table(columns, masked)
+        return samples, extract
+
     def sample_columns(self, columns: list[str]) -> str:
         """Key columns followed by ``columns``, quoted, without duplicates (or ``*``)."""
         names: list[str] = []
@@ -230,12 +260,10 @@ class CheckContext:
         mostly = self.config.mostly
         passed = mostly_passes(unexpected, total, mostly)
         samples = None
+        extract = None
         if unexpected:
-            samples = self.sample(
-                self.dialect.limit(
-                    f"SELECT {self.sample_columns(columns)}\n{self.from_where(failing)}",
-                    self.sample_size,
-                )
+            samples, extract = self.evidence(
+                f"SELECT {self.sample_columns(columns)}\n{self.from_where(failing)}"
             )
         share = pct(unexpected, total)
         message = (
@@ -255,4 +283,5 @@ class CheckContext:
             unexpected_count=unexpected,
             total_count=total,
             samples=samples,
+            extract=extract,
         )

@@ -31,6 +31,7 @@ from dvf.plugins.base import (
     Notifier,
     Relation,
     Reporter,
+    ResultSink,
     RowCheck,
 )
 from dvf.plugins.decorators import (
@@ -82,6 +83,7 @@ __all__ = [
     "ReportOptions",
     "ReportSection",
     "Reporter",
+    "ResultSink",
     "RowCheck",
     "SecretContext",
     "SecretProvider",

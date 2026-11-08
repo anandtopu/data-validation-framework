@@ -78,6 +78,7 @@ FUNCTIONS: dict[str, tuple[int, Callable[..., Any]]] = {
             lambda v: hashlib.md5(str(v).encode("utf-8"), usedforsecurity=False).hexdigest()
         ),
     ),
+    "dvf_hash_int": (2, _null_safe(lambda v, offset: int(str(v)[offset : offset + 8], 16))),
     "dvf_lower": (1, _null_safe(lambda v: canon.simple_lower(str(v)))),
     "dvf_upper": (1, _null_safe(lambda v: canon.simple_upper(str(v)))),
     "dvf_unicode_normalize": (

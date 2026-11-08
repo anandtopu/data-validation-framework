@@ -4,8 +4,8 @@
 
 `dvf` validates schemas and data quality, reconciles source and target datasets at scale, and produces detailed, auditable reports. It targets migration projects (SAP, on-premise databases to cloud warehouses, SQL to NoSQL) and data engineering pipelines (PySpark, Databricks, Parquet, Avro, JSON, CSV).
 
-!!! warning "Pre-alpha: Phase 1"
-    dvf validates and compares data from DuckDB, SQLite, PostgreSQL, and CSV, Parquet, and JSON files, and writes HTML, JSON, JUnit, and Markdown reports. Scale features, warehouses, Spark, SAP, and NoSQL arrive in later phases.
+!!! warning "Pre-alpha: Phase 2"
+    dvf validates and compares data in local files and databases (DuckDB, SQLite, PostgreSQL, SQL Server, Oracle, MySQL, plus beta Snowflake, BigQuery, Redshift, and Databricks connectors), scales to large tables with bucketed checksums and parallel execution, and explains every failure. Spark, SAP, and NoSQL arrive in Phase 3.
 
 ## What works today
 
@@ -16,11 +16,13 @@
 | `dvf compare <source> <target> -k <key>` | An ad hoc comparison of two datasets, without a configuration file |
 | `dvf report --from results.json` | Re-render reports from a results document |
 | `dvf connections test <file>` | Open every connection and run a trivial query |
+| `dvf run <file> --resume <run_id>` | Continue an interrupted or killed run from its checkpoints |
+| `dvf explain`, `dvf trace`, `dvf debug`, `dvf rerun`, `dvf history` | See the plan and SQL, follow one record, drill into a run, rerun failures, list runs ([Debugging](debugging.md)) |
 | `dvf --version`, `dvf version` | Versions of dvf, its schemas, the plugin API, Python, and the platform |
 | `dvf validate-config <file>` | Load and validate a configuration, with file, line, and column for every problem |
 | `dvf config show <file>` | The fully resolved configuration, with secrets redacted |
 | `dvf schema config`, `dvf schema results` | JSON Schemas for IDE autocomplete and integrations |
-| `dvf plugins list` | Every registered component and whether it is ready or declared |
+| `dvf plugins list` | Every registered component and whether it is ready, beta, or declared |
 
 ## Design principles
 

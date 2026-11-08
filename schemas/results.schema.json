@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "dvf results",
-  "x-dvf-results-schema-version": "1.0.0",
+  "x-dvf-results-schema-version": "1.1.0",
   "$defs": {
     "ArtifactRef": {
       "additionalProperties": false,
@@ -45,6 +45,64 @@
         "path"
       ],
       "title": "ArtifactRef",
+      "type": "object"
+    },
+    "BaselineComparison": {
+      "additionalProperties": false,
+      "description": "Failures compared with a baseline run (run-to-run diff).",
+      "properties": {
+        "baseline_run_id": {
+          "title": "Baseline Run Id",
+          "type": "string"
+        },
+        "baseline_started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Started At"
+        },
+        "policy": {
+          "description": "'last_run', 'last_passed', or an explicit run ID.",
+          "title": "Policy",
+          "type": "string"
+        },
+        "new_failures": {
+          "description": "Check IDs failing now only.",
+          "items": {
+            "type": "string"
+          },
+          "title": "New Failures",
+          "type": "array"
+        },
+        "resolved": {
+          "description": "Check IDs that failed before only.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Resolved",
+          "type": "array"
+        },
+        "persisting": {
+          "description": "Check IDs failing in both.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Persisting",
+          "type": "array"
+        }
+      },
+      "required": [
+        "baseline_run_id",
+        "policy"
+      ],
+      "title": "BaselineComparison",
       "type": "object"
     },
     "CanonicalType": {
@@ -519,6 +577,12 @@
             }
           ],
           "default": null
+        },
+        "waived": {
+          "default": false,
+          "description": "An active waiver covers this column.",
+          "title": "Waived",
+          "type": "boolean"
         }
       },
       "required": [
@@ -1617,13 +1681,77 @@
       "title": "TimingBreakdown",
       "type": "object"
     },
+    "TrendPoint": {
+      "additionalProperties": false,
+      "description": "One earlier run of the same project, for trends.",
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "quality_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quality Score"
+        },
+        "checks": {
+          "default": 0,
+          "title": "Checks",
+          "type": "integer"
+        },
+        "failed": {
+          "default": 0,
+          "title": "Failed",
+          "type": "integer"
+        },
+        "errors": {
+          "default": 0,
+          "title": "Errors",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "run_id",
+        "started_at",
+        "status"
+      ],
+      "title": "TrendPoint",
+      "type": "object"
+    },
     "WaiverApplied": {
       "additionalProperties": false,
-      "description": "A waiver that turned a failure into an accepted difference.",
+      "description": "A waiver that matched a check: it turned a failure into an accepted difference, or it has\nexpired and the failure stands.",
       "properties": {
         "selector": {
           "title": "Selector",
           "type": "string"
+        },
+        "column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Column"
         },
         "reason": {
           "title": "Reason",
@@ -1664,6 +1792,11 @@
           ],
           "default": null,
           "title": "Approved By"
+        },
+        "expired": {
+          "default": false,
+          "title": "Expired",
+          "type": "boolean"
         }
       },
       "required": [
@@ -1672,13 +1805,95 @@
       ],
       "title": "WaiverApplied",
       "type": "object"
+    },
+    "WaiverStatus": {
+      "additionalProperties": false,
+      "description": "How one configured waiver was used in a run.",
+      "properties": {
+        "selector": {
+          "title": "Selector",
+          "type": "string"
+        },
+        "column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Column"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "ticket": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ticket"
+        },
+        "approved_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved By"
+        },
+        "expires": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires"
+        },
+        "status": {
+          "description": "'applied', 'expired', or 'unused'.",
+          "title": "Status",
+          "type": "string"
+        },
+        "checks": {
+          "description": "IDs of the checks it matched.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Checks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "selector",
+        "reason",
+        "status"
+      ],
+      "title": "WaiverStatus",
+      "type": "object"
     }
   },
   "additionalProperties": false,
   "description": "The complete, canonical output of a run.",
   "properties": {
     "schema_version": {
-      "default": "1.0.0",
+      "default": "1.1.0",
       "title": "Schema Version",
       "type": "string"
     },
@@ -1746,6 +1961,44 @@
       "additionalProperties": true,
       "title": "Metadata",
       "type": "object"
+    },
+    "waivers": {
+      "items": {
+        "$ref": "#/$defs/WaiverStatus"
+      },
+      "title": "Waivers",
+      "type": "array"
+    },
+    "baseline": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BaselineComparison"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "trend": {
+      "description": "Earlier runs of this project, oldest first.",
+      "items": {
+        "$ref": "#/$defs/TrendPoint"
+      },
+      "title": "Trend",
+      "type": "array"
+    },
+    "interrupted": {
+      "default": false,
+      "description": "The run stopped early; resume it with 'dvf run --resume'.",
+      "title": "Interrupted",
+      "type": "boolean"
+    },
+    "resumed_from_checkpoint": {
+      "default": false,
+      "description": "Some tables were loaded from this run's checkpoints.",
+      "title": "Resumed From Checkpoint",
+      "type": "boolean"
     }
   },
   "required": [

@@ -18,6 +18,7 @@ from dvf.config.schema import results_json_schema
 from dvf.core.enums import Dimension, Severity, Status
 from dvf.core.errors import PluginError, UnknownPluginError
 from dvf.models.results import (
+    ArtifactRef,
     CheckResult,
     ColumnMismatch,
     DatasetPairResult,
@@ -49,7 +50,14 @@ from dvf.reporting.markdown import (
     md_escape,
     render_markdown,
 )
-from tests.unit.reporting_fixtures import PIPE_MESSAGE, XSS, build_run, many_checks_run
+from tests.unit.reporting_fixtures import (
+    BASELINE_RUN_ID,
+    PIPE_MESSAGE,
+    WAIVER_XSS,
+    XSS,
+    build_run,
+    many_checks_run,
+)
 
 ESCAPED_XSS = "&lt;script&gt;alert(1)&lt;/script&gt;"
 
@@ -627,7 +635,7 @@ def _registry() -> Registry:
 
 
 def test_builtin_reporters_map() -> None:
-    assert set(BUILTIN_REPORTERS) == {"json", "html", "junit", "markdown"}
+    assert set(BUILTIN_REPORTERS) == {"json", "html", "junit", "markdown", "excel"}
     for name, cls in BUILTIN_REPORTERS.items():
         assert cls.format == name
         assert cls.__doc__
@@ -761,3 +769,328 @@ def test_scores_timings_and_issue_order() -> None:
         }
     )
     assert _common.rows_per_second(with_rows) == 5.0
+
+
+# ---------------------------------------------------------------------- Phase 2 result fields
+
+COMPARE_ID = "sales_migration.customers.column_compare"
+ROW_COUNT_ID = "sales_migration.customers.row_count"
+WAIVED_ID = "sales_migration.orders.accepted_values.status"
+
+
+def _flagged(run: RunResult) -> RunResult:
+    return run.model_copy(update={"interrupted": True, "resumed_from_checkpoint": True})
+
+
+def test_json_carries_phase2_fields(run: RunResult) -> None:
+    data = json.loads(results_document(_flagged(run)))
+    jsonschema.Draft202012Validator(results_json_schema()).validate(data)
+    assert data["interrupted"] is True and data["resumed_from_checkpoint"] is True
+    assert [w["status"] for w in data["waivers"]] == ["applied", "applied", "expired", "unused"]
+    assert data["baseline"]["baseline_run_id"] == BASELINE_RUN_ID
+    assert data["baseline"]["new_failures"] == [
+        COMPARE_ID,
+        "sales_migration.orders.aggregate_compare",
+    ]
+    assert [p["quality_score"] for p in data["trend"]] == [80.0, None, 62.5]
+    checks = {c["check_id"]: c for s in data["suites"] for d in s["datasets"] for c in d["checks"]}
+    compare = checks[COMPARE_ID]
+    assert {a["kind"] for a in compare["artifacts"]} >= {"extract", "repro_sql", "repro_config"}
+    assert compare["details"]["partitions"][0]["name"] == "region=EU"
+    assert [m["waived"] for m in compare["column_mismatches"]] == [False, True, False, False]
+    assert checks[ROW_COUNT_ID]["waiver"]["expired"] is True
+
+
+def test_html_history_sections(run: RunResult, options: ReportOptions) -> None:
+    html = render_html(run, options)
+    for anchor in ("baseline", "trend", "waivers"):
+        assert f'<section id="{anchor}" class="card">' in html
+        assert f'<a href="#{anchor}">' in html
+    # baseline comparison, with links to the listed checks
+    assert f"2 new, 1 resolved, 2 persisting failures vs run {BASELINE_RUN_ID}" in html
+    assert "policy last_run" in html
+    assert f'<a href="#c1"><code>{COMPARE_ID}</code></a>' in html
+    assert '<span class="tag tag-new"' in html and '<span class="tag tag-persisting"' in html
+    # trend: an inline SVG sparkline (no external resources) and a table, newest first
+    sparkline = html.split('<svg class="sparkline"', 1)[1].split("</svg>", 1)[0]
+    assert sparkline.count("<circle") == 3  # one earlier run has no quality score
+    assert 'class="spark-dot current"' in sparkline and "<polyline" in sparkline
+    assert f"{run.run_id}: 50% (error), this run" in sparkline
+    trend = html.split('<table class="data trend">', 1)[1].split("</table>", 1)[0]
+    assert trend.index(run.run_id) < trend.index("20261103T093000Z-aaa111")
+    assert '<span class="tag">this run</span>' in trend
+    # waivers: every status, expired ones flagged as failures, user text escaped
+    waivers = html.split('<section id="waivers"', 1)[1].split("</section>", 1)[0]
+    assert "2 applied, 1 expired, 1 unused" in waivers
+    assert '<span class="badge b-failed">expired</span>' in waivers
+    assert '<span class="badge b-skipped">unused</span>' in waivers
+    assert 'class="w-expired hl-fail"' in waivers
+    assert "1 expired waiver.</strong>" in waivers
+    assert WAIVER_XSS not in html
+    assert "Not tracked &lt;img src=x onerror=alert(3)&gt;" in waivers
+    summary = html.split('<section id="summary"', 1)[1].split("</section>", 1)[0]
+    assert '<span class="bad">1 expired</span>' in summary
+
+
+def _check_html(html: str, marker: str) -> str:
+    """The HTML of one check's entry, from ``marker`` up to the next check."""
+    return html.split(marker, 1)[1].split('<details class="check ', 1)[0]
+
+
+def test_html_check_level_phase2_fields(run: RunResult) -> None:
+    html = render_html(run, ReportOptions())
+    compare = _check_html(html, 'id="c1"')
+    # per-partition table instead of a raw "partitions" entry in the details
+    assert "<h4>Partitions" in compare and "(2 partitions, 1 failing)" in compare
+    assert "<th>Partition</th><th>Status</th>" in compare
+    assert '<th class="num">Missing in target</th>' in compare
+    assert "region=US" in compare and '<tr class="hl">' in compare
+    assert "<th>partitions</th>" not in compare and "<th>comparison_mode</th>" in compare
+    # artifact links with readable labels, relative paths kept relative
+    assert '<span class="tag" title="repro_sql">Repro SQL</span>' in compare
+    assert 'href="repro/sales_migration.customers.column_compare.source.sql"' in compare
+    assert '<span class="tag" title="repro_config">Repro config</span>' in compare
+    # waived columns in the per-check table and the per-table matrix
+    assert html.count('<tr class="waived">') == 2
+    assert '<code>full_name</code> <span class="badge b-waived">waived</span>' in html
+    # expired waiver on a failing check
+    row_count = _check_html(html, 'id="c2"')
+    assert '<div class="waiver-box expired">' in row_count
+    assert "This waiver expired on 2026-10-31; the failure stands" in row_count
+    assert '<span class="tag tag-expired">waiver expired</span>' in row_count
+    assert 'data-status="failed"' in row_count
+    waived = _check_html(html, f'data-id="{WAIVED_ID}"')
+    assert '<span class="badge b-waived">waived</span>' in waived
+    assert '<div class="waiver-box">' in waived
+
+
+def test_html_run_notices(run: RunResult) -> None:
+    plain = render_html(run, ReportOptions())
+    assert 'class="banner banner-warning"' not in plain
+    html = render_html(_flagged(run), ReportOptions())
+    assert (
+        '<div class="banner banner-warning" role="status"><strong>Interrupted run.</strong>' in html
+    )
+    assert "resume it with &#39;dvf run --resume&#39;" in html
+    assert '<div class="banner banner-info" role="status"><strong>Resumed run.</strong>' in html
+
+
+def test_html_without_history_and_derived_waivers(run: RunResult) -> None:
+    html = render_html(_empty_run(), ReportOptions())
+    for anchor in ("baseline", "trend", "waivers"):
+        assert f'id="{anchor}"' not in html and f'href="#{anchor}"' not in html
+    legacy = run.model_copy(update={"waivers": [], "baseline": None, "trend": []})
+    html = render_html(legacy, ReportOptions())
+    assert 'id="baseline"' not in html and 'id="trend"' not in html
+    waivers = html.split('<section id="waivers"', 1)[1].split("</section>", 1)[0]
+    assert "1 applied, 1 expired, 0 unused" in waivers  # derived from the checks' waivers
+    assert f'<a href="#c2"><code>{ROW_COUNT_ID}</code></a>' in waivers
+
+
+def test_html_partition_cap(run: RunResult, monkeypatch: pytest.MonkeyPatch) -> None:
+    from dvf.reporting import html as html_module
+
+    parts: list[dict[str, object]] = [
+        {"name": f"p{n}", "status": "failed", "mismatched": n} for n in range(5)
+    ]
+    parts.append({"name": "odd", "custom_metric": 1.5})
+    changed = _replace_check(run, COMPARE_ID, details={"partitions": parts})
+    monkeypatch.setattr(html_module, "MAX_PARTITION_ROWS", 3)
+    html = render_html(changed, ReportOptions())
+    assert "Showing 3 of 6 partitions" in html
+    assert '<th class="num">custom_metric</th>' in html
+    assert "p2" in html and ">p3<" not in html
+
+
+def test_sparkline_edge_cases() -> None:
+    from dvf.models.results import TrendPoint
+    from dvf.reporting.html import _sparkline
+
+    point = TrendPoint(
+        run_id="r", started_at=datetime(2026, 1, 1, tzinfo=UTC), status=Status.PASSED
+    )
+    assert _sparkline([(point, True)]) is None  # no quality scores
+    scored = point.model_copy(update={"quality_score": 140.0})
+    single = _sparkline([(scored, True)])
+    assert single is not None and single.points[0].x == 160 and single.points[0].y == single.top
+
+
+def test_markdown_phase2_lines(run: RunResult) -> None:
+    text = render_markdown(_flagged(run), ReportOptions())
+    assert "> **Interrupted:** This run was interrupted" in text
+    assert "> **Resumed:** Some tables were loaded" in text
+    assert (
+        f"**Baseline:** 2 new, 1 resolved, 2 persisting failures vs run `{BASELINE_RUN_ID}`" in text
+    )
+    assert "**Waivers:** 2 applied, **1 expired**, 1 unused" in text
+    assert "**Quality trend:** 80% → — → 62.5% → 50% (this run)" in text
+    assert "**Expired waivers** (their failures stand until renewed or removed):" in text
+    assert (
+        f"- `{ROW_COUNT_ID}` · ticket MIG-77 · expired 2026-10-31 · 1 check — "
+        "Recent EU rows load in the next wave" in text
+    )
+    top = text.split("## Top failures", 1)[1].split("<details>", 1)[0]
+    assert "see side-by-side samples · **new since baseline**" in top
+    assert "Row counts differ in 1 of 2 regions. · persisting" in top
+    assert "- Waiver expired 2026-10-31 (MIG-77): Recent EU rows load in the next wave" in top
+    assert "- `full_name`: 5 mismatches (0.05%): case\\_only 5 · waived" in top
+    assert "- Failing partitions: 1 of 2 (`region=EU`)" in top
+    assert "Repro SQL `repro/sales_migration.customers.column_compare.source.sql`" in top
+    assert "Waiver expired 2026-10-31: Row counts differ in 1 of 2 regions." in text
+    assert WAIVER_XSS not in text
+    assert len(text) < MAX_CHARS
+
+
+def test_markdown_trend_is_capped(run: RunResult) -> None:
+    from dvf.models.results import TrendPoint
+
+    many = [
+        TrendPoint(
+            run_id=f"r{n}",
+            started_at=datetime(2026, 1, 1, tzinfo=UTC),
+            status=Status.PASSED,
+            quality_score=float(n),
+        )
+        for n in range(10)
+    ]
+    text = render_markdown(run.model_copy(update={"trend": many}), ReportOptions())
+    assert "**Quality trend:** … → 5% → 6% → 7% → 8% → 9% → 50% (this run)" in text
+
+
+def test_markdown_without_history() -> None:
+    text = render_markdown(_empty_run(), ReportOptions())
+    for label in ("**Baseline:**", "**Waivers:**", "**Quality trend:**", "Interrupted"):
+        assert label not in text
+
+
+def test_junit_phase2_fields(run: RunResult, options: ReportOptions) -> None:
+    root = _parse_junit(render_junit(_flagged(run), options))
+    assert root.get("failures") == "3"  # waivers and baselines do not change outcomes
+    sales = root.findall("testsuite")[0]
+    props = {p.get("name"): p.get("value") for p in sales.iter("property")}
+    assert props["interrupted"] == "true" and props["resumed_from_checkpoint"] == "true"
+    assert props["baseline_run_id"] == BASELINE_RUN_ID and props["baseline_policy"] == "last_run"
+    assert (props["baseline_new_failures"], props["baseline_resolved"]) == ("2", "1")
+    assert props["baseline_persisting"] == "2"
+    assert (props["waivers_applied"], props["waivers_expired"], props["waivers_unused"]) == (
+        "2",
+        "1",
+        "1",
+    )
+
+    cases = {case.get("name"): case for case in root.iter("testcase")}
+
+    def case_props(name: str | None) -> dict[str | None, str | None]:
+        found = cases[name].find("properties")
+        return {} if found is None else {p.get("name"): p.get("value") for p in found}
+
+    waived = cases[WAIVED_ID]
+    assert waived.find("failure") is None and waived.find("error") is None
+    assert case_props(WAIVED_ID) == {
+        "waived": "true",
+        "waiver.reason": "Legacy codes retired after cut-over",
+        "waiver.ticket": "MIG-101",
+        "waiver.expires": "2026-12-31",
+        "waiver.approved_by": "qa.lead",
+        "waiver.selector": "sales_migration.orders.accepted_values.*",
+    }
+    assert [child.tag for child in waived] == ["properties", "system-out"]
+
+    expired = cases[ROW_COUNT_ID].find("failure")
+    assert expired is not None  # an expired waiver does not excuse the failure
+    assert expired.get("message") == "Row counts differ in 1 of 2 regions. [waiver expired]"
+    expired_text = expired.text or ""
+    assert "Waiver EXPIRED on 2026-10-31: Recent EU rows load in the next wave" in expired_text
+    assert "Baseline: persisting failure" in expired_text
+    assert case_props(ROW_COUNT_ID) == {
+        "waiver.expired": "true",
+        "waiver.expires": "2026-10-31",
+        "waiver.ticket": "MIG-77",
+        "waiver.selector": ROW_COUNT_ID,
+        "baseline": "persisting",
+    }
+
+    compare = cases[COMPARE_ID].find("failure")
+    assert compare is not None
+    body = compare.text or ""
+    assert "Baseline: new failure" in body
+    assert "full_name: 5 rows (0.05%) [case_only: 5] (waived)" in body
+    assert "Failing partitions (1 of 2):" in body
+    assert "  - region=EU [failed]: source rows 6000, target rows 5988, mismatched 38" in body
+    assert "Artifacts (paths relative to the report folder):" in body
+    assert "  - Repro config: repro/sales_migration.customers.column_compare.yaml" in body
+    assert case_props(COMPARE_ID) == {"baseline": "new"}
+    errored = cases["sales_migration.orders.aggregate_compare"].find("error")
+    assert errored is not None and "Baseline: new failure" in (errored.text or "")
+
+
+def test_junit_partition_and_artifact_limits(run: RunResult, options: ReportOptions) -> None:
+    parts: list[dict[str, object]] = [{"name": f"p{n}", "status": "failed"} for n in range(23)]
+    parts.append({"name": "ok", "status": "passed"})
+    artifacts = [ArtifactRef(kind="extract", path=f"extracts/{n}.csv") for n in range(22)]
+    changed = _replace_check(run, COMPARE_ID, details={"partitions": parts}, artifacts=artifacts)
+    changed = _replace_check(
+        changed, ROW_COUNT_ID, details={"partitions": [{"name": "eu", "status": "passed"}]}
+    )
+    root = _parse_junit(render_junit(changed, options))
+    failures = {case.get("name"): case.find("failure") for case in root.iter("testcase")}
+    compare, row_count = failures[COMPARE_ID], failures[ROW_COUNT_ID]
+    assert compare is not None and row_count is not None
+    body = compare.text or ""
+    assert "Failing partitions (23 of 24):" in body and "3 more failing partitions" in body
+    assert "  - p0 [failed]\n" in body
+    assert "2 more artifacts" in body
+    assert "Partitions: 1, none failing" in (row_count.text or "")
+
+
+def test_common_history_helpers(run: RunResult) -> None:
+    from dvf.models.results import WaiverStatus
+
+    waivers = [
+        WaiverStatus(selector="a", reason="r", status="unused"),
+        WaiverStatus(selector="b", reason="r", status="pending"),
+        WaiverStatus(selector="c", reason="r", status="expired"),
+    ]
+    assert _common.waiver_counts(waivers) == {
+        "applied": 0,
+        "expired": 1,
+        "unused": 1,
+        "pending": 1,
+    }
+    assert run.baseline is not None
+    assert _common.baseline_summary(run.baseline) == (
+        f"2 new, 1 resolved, 2 persisting failures vs run {BASELINE_RUN_ID}"
+    )
+    marks = _common.baseline_marks(run)
+    assert marks[COMPARE_ID] == "new" and marks[ROW_COUNT_ID] == "persisting"
+    assert "sales_migration.customers.not_null.email" not in marks  # resolved
+    assert _common.baseline_marks(_empty_run()) == {}
+    assert _common.trend_series(_empty_run()) == []
+    series = _common.trend_series(run)
+    assert [current for _, current in series] == [False, False, False, True]
+    assert series[-1][0].failed == 3 and series[-1][0].errors == 1
+    assert _common.run_notices(run) == []
+    assert len(_common.run_notices(_flagged(run))) == 2
+    assert _common.artifact_label("repro_sql") == "Repro SQL"
+    assert _common.artifact_label("custom") == "custom"
+    assert _common.top_classification({}) is None
+
+
+def test_partition_table_parsing() -> None:
+    def check(details: dict[str, object]) -> CheckResult:
+        return _plain_check("x", Status.FAILED, details=details)
+
+    assert _common.partition_table(check({})) is None
+    assert _common.partition_table(check({"partitions": "not a list"})) is None
+    assert _common.partition_table(check({"partitions": [1, "x"]})) is None
+    wide = {f"extra_{n}": n for n in range(12)}
+    table = _common.partition_table(
+        check({"partitions": [{"name": "a", "status": "failed", **wide}, "junk"]})
+    )
+    assert table is not None and len(table.rows) == 1
+    assert [key for key, _ in table.columns][:2] == ["name", "status"]
+    assert len(table.columns) == 2 + 8  # extra keys are capped
+    plain = check({"partitions": [{"name": "a"}], "keep": 1})
+    assert _common.details_without_partitions(plain) == {"keep": 1}
+    raw = check({"partitions": "text", "keep": 1})
+    assert _common.details_without_partitions(raw) == {"partitions": "text", "keep": 1}

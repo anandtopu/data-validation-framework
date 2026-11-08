@@ -37,6 +37,8 @@ class Selectors:
 
     by_kind: dict[str, list[str]] = field(default_factory=dict)
     bare: list[str] = field(default_factory=list)
+    raw: list[str] = field(default_factory=list)
+    """The selectors as given (saved with checkpoints so a resumed run selects the same)."""
 
     @classmethod
     def parse(cls, items: list[str] | None) -> Selectors:
@@ -60,7 +62,7 @@ class Selectors:
                         f"Unknown severity '{pattern}' in selector '{item}'"
                     ) from None
             by_kind[kind].append(pattern.strip())
-        return cls(dict(by_kind), bare)
+        return cls(dict(by_kind), bare, list(items or []))
 
     @property
     def empty(self) -> bool:

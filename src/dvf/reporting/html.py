@@ -39,14 +39,23 @@ from dvf.models.results import (
     ProfileComparison,
     RunResult,
     SuiteResult,
+    TrendPoint,
+    WaiverStatus,
 )
 from dvf.plugins.base import Reporter
 from dvf.reporting._common import (
+    INTERRUPTED_NOTICE,
+    RESUMED_NOTICE,
     STATUS_ORDER,
     STATUS_RANK,
     CheckEntry,
     DimensionScore,
+    PartitionTable,
+    artifact_label,
+    baseline_marks,
+    baseline_summary,
     dataset_count,
+    details_without_partitions,
     dimension_scores,
     format_count,
     format_datetime,
@@ -56,6 +65,7 @@ from dvf.reporting._common import (
     format_signed,
     format_value,
     headline,
+    partition_table,
     quality_score,
     report_artifact,
     report_title,
@@ -65,7 +75,10 @@ from dvf.reporting._common import (
     sum_timings,
     to_json,
     top_issues,
+    trend_series,
     truncate,
+    waiver_counts,
+    waiver_statuses,
 )
 
 if TYPE_CHECKING:
@@ -83,6 +96,10 @@ _VALUE_LIMIT = 5000
 _SHORT_LIMIT = 160
 _CELL_LIMIT = 500
 _SEARCH_MESSAGE_LIMIT = 300
+MAX_PARTITION_ROWS = 500
+"""Partition rows shown per check; the rest stay in the JSON document."""
+MAX_LISTED_CHECKS = 50
+"""Check IDs listed per waiver and per baseline category before '... n more'."""
 
 _COLOR = re.compile(r"^#(?:[0-9A-Fa-f]{3}){1,2}$")
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
@@ -142,10 +159,21 @@ class CheckView:
     included: bool
     """False for passed checks left out of the detail list (``include_passed=False``)."""
     search: str
+    baseline: str | None = None
+    """``new`` or ``persisting`` when the check fails relative to the baseline run."""
 
     @property
     def check(self) -> CheckResult:
         return self.entry.check
+
+    @property
+    def partitions(self) -> PartitionTable | None:
+        return partition_table(self.entry.check)
+
+    @property
+    def extra_details(self) -> dict[str, Any]:
+        """Custom details, without ``partitions`` when it is shown as its own table."""
+        return details_without_partitions(self.entry.check)
 
     @property
     def index(self) -> int:
@@ -225,6 +253,76 @@ class Chart:
     height: int
     label_width: int
     bars: list[Bar]
+
+
+@dataclass(frozen=True, slots=True)
+class SparkPoint:
+    x: float
+    y: float
+    label: str
+    current: bool
+
+
+@dataclass(frozen=True, slots=True)
+class Sparkline:
+    """An inline SVG sparkline of the quality score over earlier runs and this one."""
+
+    width: int
+    height: int
+    top: float
+    bottom: float
+    points: list[SparkPoint]
+
+    @property
+    def polyline(self) -> str:
+        return " ".join(f"{point.x:g},{point.y:g}" for point in self.points)
+
+
+@dataclass(frozen=True, slots=True)
+class CheckLink:
+    """A check ID, with the anchor of its detail entry when the report lists it."""
+
+    check_id: str
+    anchor: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class LinkList:
+    links: list[CheckLink]
+    total: int
+
+    @property
+    def more(self) -> int:
+        return self.total - len(self.links)
+
+
+@dataclass(frozen=True, slots=True)
+class WaiverView:
+    waiver: WaiverStatus
+    checks: LinkList
+
+    @property
+    def badge(self) -> str:
+        """Status style for the waiver's own status: expired waivers look like failures."""
+        return _WAIVER_BADGES.get(self.waiver.status, "skipped")
+
+
+@dataclass(frozen=True, slots=True)
+class BaselineView:
+    text: str
+    new_failures: LinkList
+    resolved: LinkList
+    persisting: LinkList
+
+
+@dataclass(frozen=True, slots=True)
+class Notice:
+    kind: str
+    label: str
+    text: str
+
+
+_WAIVER_BADGES = {"applied": "waived", "expired": "failed", "unused": "skipped"}
 
 
 # ---------------------------------------------------------------------- helpers
@@ -376,6 +474,69 @@ def _chart(counts: dict[Status, int]) -> Chart:
     return Chart(label_width + bar_area + 60, row_height * len(bars) + 4, label_width, bars)
 
 
+def _sparkline(series: list[tuple[TrendPoint, bool]]) -> Sparkline | None:
+    """Quality score from 0 to 100 on a fixed scale, one point per run; None without scores."""
+    width, height, pad = 320, 64, 6
+    top, bottom = float(pad), float(height - pad)
+    step = (width - 2 * pad) / max(len(series) - 1, 1)
+    points = []
+    for position, (point, current) in enumerate(series):
+        if point.quality_score is None:
+            continue
+        score = min(max(point.quality_score, 0.0), 100.0)
+        x = width / 2 if len(series) == 1 else pad + position * step
+        y = top + (100.0 - score) / 100.0 * (bottom - top)
+        label = f"{point.run_id}: {format_pct(point.quality_score)} ({point.status.value})"
+        if current:
+            label += ", this run"
+        points.append(SparkPoint(round(x, 1), round(y, 1), label, current))
+    if not points:
+        return None
+    return Sparkline(width, height, top, bottom, points)
+
+
+def _link_list(check_ids: list[str], anchors: Mapping[str, str]) -> LinkList:
+    shown = check_ids[:MAX_LISTED_CHECKS]
+    return LinkList([CheckLink(cid, anchors.get(cid)) for cid in shown], len(check_ids))
+
+
+def _notices(run: RunResult) -> list[Notice]:
+    notices = []
+    if run.interrupted:
+        notices.append(Notice("warning", "Interrupted run.", INTERRUPTED_NOTICE))
+    if run.resumed_from_checkpoint:
+        notices.append(Notice("info", "Resumed run.", RESUMED_NOTICE))
+    return notices
+
+
+def _history_context(run: RunResult, views: list[CheckView]) -> dict[str, Any]:
+    """Baseline, waiver, and trend sections."""
+    anchors: dict[str, str] = {}
+    for view in views:
+        if view.included:
+            anchors.setdefault(view.check.check_id, view.anchor)
+    baseline = run.baseline
+    baseline_view = None
+    if baseline is not None:
+        baseline_view = BaselineView(
+            text=baseline_summary(baseline),
+            new_failures=_link_list(baseline.new_failures, anchors),
+            resolved=_link_list(baseline.resolved, anchors),
+            persisting=_link_list(baseline.persisting, anchors),
+        )
+    waivers = waiver_statuses(run)
+    series = trend_series(run)
+    return {
+        "notices": _notices(run),
+        "baseline": baseline,
+        "baseline_view": baseline_view,
+        "waivers": [WaiverView(w, _link_list(w.checks, anchors)) for w in waivers],
+        "waiver_counts": waiver_counts(waivers),
+        "trend": series,
+        "sparkline": _sparkline(series),
+    }
+
+
 # ---------------------------------------------------------------------- context
 
 
@@ -383,6 +544,7 @@ def build_context(run: RunResult, options: ReportOptions) -> dict[str, Any]:
     """Everything the templates need, computed in one pass over the checks."""
     views: list[CheckView] = []
     suites: list[SuiteView] = []
+    marks = baseline_marks(run)
     table_number = 0
     for suite in run.suites:
         dataset_views: list[DatasetView] = []
@@ -392,7 +554,15 @@ def build_context(run: RunResult, options: ReportOptions) -> dict[str, Any]:
             for check in dataset.checks:
                 entry = CheckEntry(len(views) + len(own) + 1, suite, dataset, check)
                 included = options.include_passed or check.status is not Status.PASSED
-                own.append(CheckView(entry, f"c{entry.index}", included, _search_text(entry)))
+                own.append(
+                    CheckView(
+                        entry,
+                        f"c{entry.index}",
+                        included,
+                        _search_text(entry),
+                        marks.get(check.check_id),
+                    )
+                )
             views.extend(own)
             dataset_views.append(
                 DatasetView(
@@ -455,6 +625,8 @@ def build_context(run: RunResult, options: ReportOptions) -> dict[str, Any]:
         "cli": shlex.join(run.environment.cli_args),
         "config_json": to_json(run.config_snapshot, indent=2),
         "generator": f"dvf {__version__}",
+        "max_partitions": MAX_PARTITION_ROWS,
+        **_history_context(run, views),
     }
 
 
@@ -485,6 +657,7 @@ def create_environment(options: ReportOptions) -> Environment:
         group=format_group,
         classes=sorted_classifications,
         href=artifact_href,
+        artifact_label=artifact_label,
     )
     env.tests["structured"] = _is_structured
     return env

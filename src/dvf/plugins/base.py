@@ -25,9 +25,10 @@ if TYPE_CHECKING:
     from dvf.compare.context import ComparisonContext
     from dvf.config.checks import CheckConfig
     from dvf.config.connections import ConnectionConfig
-    from dvf.config.models import DatasetSpec
+    from dvf.config.models import DatasetSpec, SinkConfig
     from dvf.core.datasets import DatasetRef, DatasetSchema
     from dvf.core.types import CanonicalType
+    from dvf.execution.context import RetryPolicy
     from dvf.models.results import ArtifactRef, RunResult
     from dvf.reporting.base import ReportOptions
     from dvf.sql.dialects import Dialect
@@ -130,6 +131,21 @@ class Connector(Component):
         self.name = name
         self.config = config
         self.base_dir = base_dir
+        self.retry_policy: RetryPolicy | None = None
+        """Set by the run: how often queries that failed transiently are retried."""
+
+    def is_transient(self, exc: BaseException) -> bool:
+        """Whether ``exc`` is worth retrying (a lost connection or a deadlock, not a bad query or
+        a timeout). The default recognizes common driver messages; override for precision."""
+        seen: set[int] = set()
+        current: BaseException | None = exc
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            text = str(current).lower()
+            if any(phrase in text for phrase in _TRANSIENT_PHRASES):
+                return True
+            current = current.__cause__ or current.__context__
+        return False
 
     # ------------------------------------------------------------------ lifecycle
     def open(self) -> None:  # pragma: no cover - interface
@@ -153,6 +169,14 @@ class Connector(Component):
 
     def server_version(self) -> str | None:
         return None
+
+    def fork(self) -> Connector:
+        """A new, unopened session on the same system, used by another worker thread.
+
+        The parallel executor gives each thread its own session. Override this when sessions
+        must share state (DuckDB in-memory databases share one database through cursors).
+        """
+        return type(self)(self.name, self.config, self.base_dir)
 
     def test_connection(self) -> ConnectionReport:
         """Open the connection and run a trivial query."""
@@ -201,6 +225,34 @@ class Connector(Component):
     ) -> Iterator[pa.RecordBatch]:  # pragma: no cover - interface
         """Run a query and stream the rows as Arrow record batches."""
         raise NotImplementedError
+
+    def register_arrow(self, name: str, table: pa.Table) -> bool:
+        """Make ``table`` queryable as ``name`` in this session, if the system can.
+
+        Engines use it to filter rows by a list of keys without a long literal list. Return
+        ``False`` (the default) when not supported; nothing is ever written to the source.
+        """
+        return False
+
+    def unregister_arrow(self, name: str) -> None:
+        """Undo :meth:`register_arrow`."""
+
+
+_TRANSIENT_PHRASES = (
+    "connection reset",
+    "connection refused",
+    "connection is closed",
+    "connection already closed",
+    "server closed the connection",
+    "terminating connection",
+    "lost connection",
+    "broken pipe",
+    "connection timed out",
+    "deadlock",
+    "could not serialize access",
+    "temporarily unavailable",
+    "too many connections",
+)
 
 
 def _ms_since(started: float) -> float:
@@ -288,6 +340,23 @@ class Reporter(Component):
         self, run: RunResult, out_dir: Path, options: ReportOptions
     ) -> list[ArtifactRef]:  # pragma: no cover - interface
         """Write the report into ``out_dir`` and return the files written."""
+        raise NotImplementedError
+
+
+class ResultSink(Component):
+    """Base class for result sinks: write each run's results as tables, for dashboards.
+
+    Subclasses implement :meth:`write`. They receive the sink's
+    :class:`~dvf.config.models.SinkConfig` and the configuration's folder, so relative paths
+    resolve like other paths in the configuration.
+    """
+
+    def __init__(self, config: SinkConfig, base_dir: Path) -> None:
+        self.config = config
+        self.base_dir = base_dir
+
+    def write(self, run: RunResult) -> None:  # pragma: no cover - interface
+        """Append ``run`` (its run row and one row per check) to the sink's tables."""
         raise NotImplementedError
 
 

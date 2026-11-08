@@ -166,5 +166,28 @@ details.sub > summary { cursor: pointer; color: var(--waived); }
 .query { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 6px 0; }
 .qmeta { font-size: 12.5px; color: var(--muted); }
 pre.prose { white-space: pre-wrap; font-family: inherit; font-size: 14px; background: transparent; border: 0; padding: 0; max-height: none; }
+
+/* run notices, baseline, trend, and waivers */
+.banner { border: 1px solid var(--border); border-left-width: 4px; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; background: var(--card); }
+.banner-warning { border-color: var(--warning); background: var(--warning-bg); }
+.banner-info { border-color: var(--waived); background: var(--waived-bg); }
+.banner-failed { border-color: var(--failed); background: var(--failed-bg); }
+.history-line { margin: 0 0 14px; }
+.tag-new { background: var(--failed-bg); border-color: var(--failed); color: var(--failed); font-weight: 600; }
+.tag-persisting { background: var(--warning-bg); border-color: var(--warning); color: var(--warning); }
+.tag-expired { background: var(--failed-bg); border-color: var(--failed); color: var(--failed); font-weight: 600; }
+.waiver-box.expired { border-color: var(--failed); background: var(--failed-bg); }
+table.data tr.waived > td { background: var(--waived-bg) !important; }
+table.data tr.hl-fail > td { background: var(--failed-bg) !important; }
+table.data tr.current > td { font-weight: 600; }
+ul.ids { margin: 4px 0; padding-left: 18px; }
+.baseline-new { border-left: 4px solid var(--failed); }
+.baseline-resolved { border-left: 4px solid var(--passed); }
+.baseline-persisting { border-left: 4px solid var(--warning); }
+svg.sparkline { display: block; max-width: 100%; height: auto; margin: 4px 0 10px; }
+svg.sparkline .guide { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 3; }
+svg.sparkline .spark-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+svg.sparkline .spark-dot { fill: var(--card); stroke: var(--accent); stroke-width: 2; }
+svg.sparkline .spark-dot.current { fill: var(--accent); }
 @media print { nav.toc, .toolbar { display: none !important; } details.check, details.table-card { break-inside: avoid; } }
 {% endraw %}

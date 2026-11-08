@@ -70,6 +70,24 @@ uv run dvf run dvf.yaml --only table:customers --only check:not_null
 
 Selectors are `suite:`, `table:`, `check:` (type or check ID), `tag:`, and `severity:` (minimum), with glob patterns. Selectors of the same kind are alternatives; different kinds must all match.
 
+## Investigate a failure
+
+```bash
+uv run dvf explain dvf.yaml --table customers          # the plan and SQL, without running
+uv run dvf trace dvf.yaml --table customers --key 1011 # one record, step by step, on both sides
+uv run dvf debug RUN_ID --config dvf.yaml              # failed checks of a run, then one in full
+uv run dvf rerun RUN_ID                                # run only what failed
+```
+
+Each failed check also gets an extract of its mismatched values and repro files (the exact SQL per side and a one-check configuration) next to the reports. See [Debugging and operations](debugging.md).
+
+## Large tables
+
+- Tables run in parallel (`defaults.execution.max_parallel_tables`), with per-connection caps (`max_parallel_queries` on a connection).
+- For large tables in different databases that are mostly identical, use `strategies: [row_count, hash_bucket]` (or `bisect` for an indexed integer key): only rows in differing buckets move.
+- `comparison.partitions` splits a table into slices that are compared and checkpointed one at a time.
+- An interrupted or killed run continues with `dvf run dvf.yaml --resume RUN_ID`.
+
 ## Use dvf in CI
 
 ```bash
@@ -80,7 +98,7 @@ uv run dvf run dvf.yaml --fail-on error --min-score 95 --format junit --format m
 |---|---|
 | 0 | Passed (warnings allowed unless `--strict`) |
 | 1 | Validation failures at or above `--fail-on` (default `error`), or a quality score below `--min-score` |
-| 2 | Execution error: a connection, query, or engine failed |
+| 2 | Execution error: a connection, query, or engine failed, or the run was interrupted |
 | 3 | Configuration or usage error |
 
 Publish `junit.xml` to your CI's test tab and append `summary.md` to `$GITHUB_STEP_SUMMARY`.
@@ -98,7 +116,7 @@ for check in result.iter_checks():
 print(api.exit_code(result))
 ```
 
-`api.compare(source, target, keys=[...])` runs an ad hoc comparison, and `api.render_reports("results.json", ["html"], "out")` re-renders reports.
+`api.compare(source, target, keys=[...])` runs an ad hoc comparison, `api.render_reports("results.json", ["html"], "out")` re-renders reports, and `api.explain`, `api.trace`, and `api.load_run` expose the debugging tools.
 
 ## Get autocomplete in your editor
 

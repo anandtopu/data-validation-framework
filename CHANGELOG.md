@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Phase 2 scale and debugging:
+  - Two-phase row diffs: keys and row hashes for every row, then full values only for differing rows. Duplicate keys are probed before de-duplicating. The 10-million-row, 30-column local benchmark dropped from more than ten minutes to 36 to 76 seconds (target: two minutes).
+  - Comparison strategies `hash_bucket` (nested bucket checksums by key hash) and `bisect` (nested integer key ranges, index friendly), with drill-down settings `buckets`, `drilldown_fanout`, and `drilldown_threshold`. Rows moved between databases grow with the number of differences.
+  - Partitions (`comparison.partitions`): by values, ranges, key-hash buckets, or predicates, compared and checkpointed one at a time.
+  - Parallel executor (`max_parallel_tables`) with per-connection caps (`max_parallel_queries`, `max_queries_per_connection`) and one session per worker (`Connector.fork`).
+  - Checkpoints and `dvf run --resume RUN_ID` (with `--force-resume`). Interrupted runs write partial results and exit with code 2.
+  - Retries with exponential backoff for transient errors, and `query_timeout_s` applied to every connection that sets none.
+  - Waivers at run time (`waived` status, column waivers, expired waivers flagged), run history in DuckDB or SQLite, baselines (`last_run`, `last_passed`, a run ID) with new, resolved, and persisting failures, and trends.
+  - Extracts of mismatched values and failing rows (Parquet or CSV), and repro files per failed check: per-side SQL and a one-check configuration.
+  - Excel report (`dvf[excel]`) and result sinks (`duckdb`, `sqlite`, `postgres`). HTML, Markdown, and JUnit reports show waivers, baselines, trends, partitions, and artifacts.
+  - Commands `explain`, `trace`, `debug`, `rerun`, and `history`; `run` options `--resume`, `--failed-from`, `--parallel`, `--keep-temp`, `--no-history`, and `--baseline`. Python API `api.explain`, `api.trace`, `api.load_run`, `api.run_history`, and the notebook helper `dvf.debug.load`.
+  - Connectors: SQL Server (`dvf[mssql]`), Oracle (`dvf[oracle]`), MySQL and MariaDB (`dvf[mysql]`), and, as beta (implemented and unit-tested, not yet verified against a live service), Snowflake, BigQuery, Redshift, and Databricks SQL. Each has its own SQL dialect module.
+  - Component maturity: `dvf plugins list` shows `ready`, `beta`, or `declared`.
+  - Portable diff SQL: counts in cross-joined derived tables (Oracle), an emulated full join (MySQL), emptiness tested by length (Oracle, SQL Server, MySQL), and the simple upper-case mapping in the reference (for example U+1F80).
+  - JSON logs carry `run_id`, `suite`, and `table`.
+  - Benchmarks (`uv run nox -s benchmark`) with a 15% regression check.
+  - ADR 0008 (Phase 2 scale and debugging). Results schema 1.1.0 adds waivers, baseline, trend, and interruption fields.
+
 - Phase 1 local MVP:
   - Connectors: DuckDB, SQLite, PostgreSQL (`dvf[postgres]`), and files (CSV, TSV, Parquet, JSON, NDJSON) read through DuckDB.
   - Canonicalization with a Python reference and SQL (DuckDB, PostgreSQL, SQLite) and Polars implementations, verified by Hypothesis parity tests; length-prefixed MD5 row hashes.

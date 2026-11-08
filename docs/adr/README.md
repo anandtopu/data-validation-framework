@@ -11,3 +11,4 @@ We record significant decisions using [Michael Nygard's format](https://cognitec
 | [0005](0005-plugin-api.md) | Plugin API: registry, entry points, and pluggy hooks | Accepted |
 | [0006](0006-configuration-model.md) | Configuration model and loading pipeline | Accepted |
 | [0007](0007-phase1-execution-model.md) | Phase 1 execution model | Accepted |
+| [0008](0008-phase2-scale-and-debugging.md) | Phase 2 scale and debugging | Accepted |

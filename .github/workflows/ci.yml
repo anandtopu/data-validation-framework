@@ -63,8 +63,9 @@ jobs:
           path: coverage.xml
 
   integration:
-    name: Integration (PostgreSQL)
+    name: Integration (PostgreSQL, MySQL, SQL Server, Oracle)
     runs-on: ubuntu-latest
+    # Throwaway service containers; the passwords below exist only inside this job.
     services:
       postgres:
         image: postgres:16-alpine
@@ -77,15 +78,88 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: dvf-ci
+          MYSQL_DATABASE: dvf
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pdvf-ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Dvf-ci-Passw0rd
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Dvf-ci-Passw0rd -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+      oracle:
+        image: gvenzl/oracle-free:23-slim
+        env:
+          ORACLE_PASSWORD: dvf-ci
+          APP_USER: dvf_test
+          APP_USER_PASSWORD: dvf-ci
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
     env:
       DVF_TEST_POSTGRES_URL: postgresql://postgres:dvf-ci@localhost:5432/postgres
+      DVF_TEST_MYSQL_URL: mysql://root:dvf-ci@localhost:3306/dvf
+      DVF_TEST_MSSQL_URL: mssql://sa:Dvf-ci-Passw0rd@127.0.0.1:1433/master?TrustServerCertificate=yes
+      DVF_TEST_ORACLE_URL: oracle://dvf_test:dvf-ci@localhost:1521/FREEPDB1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked --extra mysql --extra mssql --extra oracle
+      - run: uv run pytest -m integration -v
+
+  benchmark:
+    name: Benchmarks (2 million rows)
+    # On main and on demand; on pull requests only when labelled 'benchmark'.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'benchmark')
+    runs-on: ubuntu-latest
+    env:
+      DVF_BENCH_ROWS: "2000000"
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10
         with:
           python-version: "3.12"
       - run: uv sync --locked
-      - run: uv run pytest -m integration -v
+      - name: Restore the baseline of this runner type
+        uses: actions/cache/restore@v4
+        with:
+          path: .benchmarks/baseline.json
+          key: benchmark-baseline-${{ runner.os }}-${{ github.sha }}
+          restore-keys: benchmark-baseline-${{ runner.os }}-
+      - name: Run benchmarks (fail on a miss or a >15% slowdown)
+        run: uv run nox -s benchmark -- ${{ github.ref == 'refs/heads/main' && '--update' || '' }}
+      - name: Save the new baseline (main only)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: .benchmarks/baseline.json
+          key: benchmark-baseline-${{ runner.os }}-${{ github.sha }}
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: benchmark-results
+          path: .benchmarks/results.json
 
   docs:
     name: Docs build

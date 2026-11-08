@@ -35,8 +35,9 @@ class _MyCheck(Check):
 
 def test_builtins_are_declared(registry: Registry) -> None:
     assert registry.get(PluginKind.CHECK, "not_null").status == "ready"
-    entry = registry.get(PluginKind.CONNECTOR, "snowflake")
+    entry = registry.get(PluginKind.CONNECTOR, "teradata")
     assert entry.status == "declared"
+    assert registry.get(PluginKind.CONNECTOR, "snowflake").status == "beta"
     assert entry.config_model is not None
     assert entry.origin == "builtin"
     assert registry.get(PluginKind.SECRET_PROVIDER, "env").ready
@@ -90,11 +91,11 @@ def test_builtin_implementation_attaches_to_declaration(registry: Registry) -> N
     class MySql(Connector):
         pass
 
-    assert not registry.get(PluginKind.CONNECTOR, "mysql").ready
-    entry = registry.register(PluginKind.CONNECTOR, "mysql", MySql, origin="builtin")
+    assert not registry.get(PluginKind.CONNECTOR, "teradata").ready
+    entry = registry.register(PluginKind.CONNECTOR, "teradata", MySql, origin="builtin")
     assert entry.ready
     assert entry.config_model is not None  # kept from the declaration
-    assert entry.description.startswith("MySQL")
+    assert entry.description.startswith("Teradata")
 
 
 def test_config_model_must_subclass_base(registry: Registry) -> None:

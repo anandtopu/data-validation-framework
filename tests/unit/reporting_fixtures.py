@@ -9,6 +9,7 @@ from dvf.core.enums import Dimension, Severity, Side, Status
 from dvf.core.types import CanonicalType, Compatibility
 from dvf.models.results import (
     ArtifactRef,
+    BaselineComparison,
     CheckResult,
     ColumnMismatch,
     ColumnProfile,
@@ -26,13 +27,37 @@ from dvf.models.results import (
     SampleSet,
     SuiteResult,
     TimingBreakdown,
+    TrendPoint,
     WaiverApplied,
+    WaiverStatus,
     aggregate_status,
 )
 
 XSS = "<script>alert(1)</script>"
+WAIVER_XSS = "<img src=x onerror=alert(3)>"
 PIPE_MESSAGE = "38 rows differ | see side-by-side samples"
 STARTED = datetime(2026, 11, 6, 9, 30, tzinfo=UTC)
+BASELINE_RUN_ID = "20261105T093000Z-prev01"
+PARTITIONS = [
+    {
+        "name": "region=EU",
+        "status": "failed",
+        "source_rows": 6000,
+        "target_rows": 5988,
+        "mismatched": 38,
+        "missing_in_target": 12,
+        "extra_in_target": 0,
+    },
+    {
+        "name": "region=US",
+        "status": "passed",
+        "source_rows": 4000,
+        "target_rows": 4000,
+        "mismatched": 0,
+        "missing_in_target": 0,
+        "extra_in_target": 0,
+    },
+]
 
 
 def _ref(connection: str, name: str) -> DatasetRef:
@@ -108,6 +133,7 @@ def _customers() -> DatasetPairResult:
                 mismatch_pct=0.05,
                 classifications={"case_only": 5},
                 hints=["Names differ only in case; consider 'case: lower'."],
+                waived=True,
             ),
             ColumnMismatch(
                 column="balance",
@@ -137,6 +163,16 @@ def _customers() -> DatasetPairResult:
                 rows=38,
             ),
             ArtifactRef(kind="repro", path="javascript:alert(2)", format="sql"),
+            ArtifactRef(
+                kind="repro_sql",
+                path="repro/sales_migration.customers.column_compare.source.sql",
+                format="sql",
+            ),
+            ArtifactRef(
+                kind="repro_config",
+                path="repro/sales_migration.customers.column_compare.yaml",
+                format="yaml",
+            ),
         ],
         queries=[
             QueryRecord(
@@ -171,7 +207,12 @@ def _customers() -> DatasetPairResult:
             render_ms=60.0,
             total_ms=2000.0,
         ),
-        details={"comparison_mode": "row_hash", "buckets": [1, 2, 3], "ticket": "DQ-42"},
+        details={
+            "comparison_mode": "row_hash",
+            "buckets": [1, 2, 3],
+            "ticket": "DQ-42",
+            "partitions": PARTITIONS,
+        },
         metadata={"release": "2026.11", "nested": {"approved": True}},
     )
     row_count = _check(
@@ -182,6 +223,14 @@ def _customers() -> DatasetPairResult:
         message="Row counts differ in 1 of 2 regions.",
         observed=9988,
         expected=10000,
+        waiver=WaiverApplied(
+            selector="sales_migration.customers.row_count",
+            reason="Recent EU rows load in the next wave",
+            ticket="MIG-77",
+            expires="2026-10-31",
+            approved_by="architect",
+            expired=True,
+        ),
         metrics=[
             MetricComparison(
                 metric="row_count",
@@ -476,8 +525,86 @@ def build_run() -> RunResult:
             "connections": {"legacy": {"type": "mssql", "password": "***"}},
         },
         metadata={"release": "R-2026.11", "approver": "QA Lead"},
+        waivers=_waivers(),
+        baseline=BaselineComparison(
+            baseline_run_id=BASELINE_RUN_ID,
+            baseline_started_at=STARTED - timedelta(days=1),
+            policy="last_run",
+            new_failures=[
+                "sales_migration.customers.column_compare",
+                "sales_migration.orders.aggregate_compare",
+            ],
+            resolved=["sales_migration.customers.not_null.email"],
+            persisting=[
+                "sales_migration.customers.row_count",
+                "sales_migration.customers.type_compatibility",
+            ],
+        ),
+        trend=[
+            TrendPoint(
+                run_id="20261103T093000Z-aaa111",
+                started_at=STARTED - timedelta(days=3),
+                status=Status.FAILED,
+                quality_score=80.0,
+                checks=11,
+                failed=2,
+            ),
+            TrendPoint(
+                run_id="20261104T093000Z-bbb222",
+                started_at=STARTED - timedelta(days=2),
+                status=Status.FAILED,
+                quality_score=None,
+                checks=11,
+                failed=3,
+            ),
+            TrendPoint(
+                run_id=BASELINE_RUN_ID,
+                started_at=STARTED - timedelta(days=1),
+                status=Status.ERROR,
+                quality_score=62.5,
+                checks=11,
+                failed=3,
+                errors=1,
+            ),
+        ],
     )
     return run.model_copy(update={"summary": run.summarize()})
+
+
+def _waivers() -> list[WaiverStatus]:
+    return [
+        WaiverStatus(
+            selector="sales_migration.orders.accepted_values.*",
+            reason="Legacy codes retired after cut-over",
+            ticket="MIG-101",
+            approved_by="qa.lead",
+            expires="2026-12-31",
+            status="applied",
+            checks=["sales_migration.orders.accepted_values.status"],
+        ),
+        WaiverStatus(
+            selector="sales_migration.customers.column_compare",
+            column="full_name",
+            reason="Case differences in names are accepted",
+            ticket="MIG-55",
+            status="applied",
+            checks=["sales_migration.customers.column_compare"],
+        ),
+        WaiverStatus(
+            selector="sales_migration.customers.row_count",
+            reason="Recent EU rows load in the next wave",
+            ticket="MIG-77",
+            approved_by="architect",
+            expires="2026-10-31",
+            status="expired",
+            checks=["sales_migration.customers.row_count"],
+        ),
+        WaiverStatus(
+            selector="reference_data.*.freshness",
+            reason=f"Not tracked {WAIVER_XSS}",
+            status="unused",
+        ),
+    ]
 
 
 def many_checks_run(count: int, status: Status = Status.FAILED) -> RunResult:

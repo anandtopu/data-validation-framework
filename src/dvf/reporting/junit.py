@@ -2,12 +2,12 @@
 
 Each dvf suite becomes a ``<testsuite>`` and each check a ``<testcase>``. Failed checks map to
 ``<failure>``, errored checks to ``<error>``, and skipped checks to ``<skipped>``. Warnings and
-waived checks pass, with a note in ``<system-out>``.
+waived checks pass, with a note in ``<system-out>``; waived checks also carry ``waived`` test case
+properties. A failure whose waiver has expired stays a failure and says so.
 """
 
 from __future__ import annotations
 
-import re
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from pathlib import Path
@@ -18,39 +18,41 @@ from dvf.models.results import ArtifactRef, CheckResult, RunResult, SuiteResult
 from dvf.plugins.base import Reporter
 from dvf.reporting._common import (
     CheckEntry,
+    artifact_label,
+    baseline_marks,
     format_count,
     format_group,
     format_pct,
     format_value,
     headline,
     iter_entries,
+    partition_table,
     quality_score,
     report_artifact,
     report_title,
     sorted_classifications,
     truncate,
+    waiver_counts,
+    waiver_expired,
+    waiver_statuses,
     write_text,
+    xml_text,
 )
 
 if TYPE_CHECKING:
     from dvf.reporting.base import ReportOptions
 
-JUNIT_FILE = "junit.xml"
+__all__ = ["JUNIT_FILE", "JUnitReporter", "build_junit", "render_junit", "xml_text"]
 
-_INVALID_XML_CHARS = re.compile(r"[^\t\n\r\x20-퟿-�\U00010000-\U0010ffff]")
-"""Characters XML 1.0 does not allow, including lone surrogates."""
+JUNIT_FILE = "junit.xml"
 
 _MAX_VALUE = 1000
 _MAX_SQL = 4000
 _MAX_COLUMNS = 10
 _MAX_METRICS = 20
 _MAX_MESSAGE = 1000
-
-
-def xml_text(value: object) -> str:
-    """``value`` as text that is valid in XML 1.0 content and attributes."""
-    text = value if isinstance(value, str) else str(value)
-    return _INVALID_XML_CHARS.sub("", text)
+_MAX_PARTITIONS = 20
+_MAX_ARTIFACTS = 20
 
 
 def _seconds(ms: float | None) -> str:
@@ -71,7 +73,7 @@ def _text_element(
     return element
 
 
-def _outcome_lines(entry: CheckEntry) -> list[str]:
+def _outcome_lines(entry: CheckEntry, mark: str | None = None) -> list[str]:
     """Plain-text evidence for a check: what was asserted, observed, and suggested."""
     check = entry.check
     lines = [
@@ -83,6 +85,8 @@ def _outcome_lines(entry: CheckEntry) -> list[str]:
         lines.append("Columns: " + ", ".join(check.columns))
     if check.partition:
         lines.append(f"Partition: {check.partition}")
+    if mark:
+        lines.append(f"Baseline: {mark} failure")
     if check.message:
         lines.append(f"Message: {truncate(check.message, _MAX_MESSAGE)}")
     if check.observed is not None or check.expected is not None:
@@ -94,7 +98,9 @@ def _outcome_lines(entry: CheckEntry) -> list[str]:
         lines.append(f"Unexpected: {format_count(check.unexpected_count)}{of_total}{pct}")
     if check.mostly is not None:
         lines.append(f"Mostly: {format_value(check.mostly)}")
+    lines.extend(_expired_waiver_lines(check))
     lines.extend(_mismatch_lines(check))
+    lines.extend(_partition_lines(check))
     lines.extend(_metric_lines(check))
     if check.hints:
         lines.append("Hints:")
@@ -105,7 +111,21 @@ def _outcome_lines(entry: CheckEntry) -> list[str]:
         lines.extend("    " + line for line in truncate(query.sql, _MAX_SQL).splitlines())
     if check.engine:
         lines.append(f"Engine: {check.engine}")
+    lines.extend(_artifact_lines(check))
     return lines
+
+
+def _expired_waiver_lines(check: CheckResult) -> list[str]:
+    waiver = check.waiver
+    if waiver is None or not waiver.expired:
+        return []
+    when = f" on {waiver.expires}" if waiver.expires else ""
+    column = f", column {waiver.column}" if waiver.column else ""
+    ticket = f", ticket {waiver.ticket}" if waiver.ticket else ""
+    return [
+        f"Waiver EXPIRED{when}: {waiver.reason} (selector {waiver.selector}{column}{ticket}). "
+        "The failure stands until the waiver is renewed or removed."
+    ]
 
 
 def _mismatch_lines(check: CheckResult) -> list[str]:
@@ -119,13 +139,36 @@ def _mismatch_lines(check: CheckResult) -> list[str]:
             for name, n in sorted_classifications(mismatch.classifications)
         )
         detail = f" [{classes}]" if classes else ""
+        waived = " (waived)" if mismatch.waived else ""
         lines.append(
             f"  - {mismatch.column}: {format_count(mismatch.mismatch_count)} rows "
-            f"({format_pct(mismatch.mismatch_pct)}){detail}"
+            f"({format_pct(mismatch.mismatch_pct)}){detail}{waived}"
         )
         lines.extend(f"      hint: {hint}" for hint in mismatch.hints)
     if len(ranked) > _MAX_COLUMNS:
         lines.append(f"  ... {len(ranked) - _MAX_COLUMNS} more columns")
+    return lines
+
+
+def _partition_lines(check: CheckResult) -> list[str]:
+    table = partition_table(check)
+    if table is None:
+        return []
+    failing = table.failing()
+    if not failing:
+        return [f"Partitions: {len(table.rows)}, none failing"]
+    lines = [f"Failing partitions ({len(failing)} of {len(table.rows)}):"]
+    for row in failing[:_MAX_PARTITIONS]:
+        counts = ", ".join(
+            f"{label.lower()} {format_value(row[key], limit=_MAX_VALUE)}"
+            for key, label in table.columns
+            if key not in ("name", "status") and key in row
+        )
+        name = format_value(row.get("name"), limit=_MAX_VALUE)
+        status = format_value(row.get("status"))
+        lines.append(f"  - {name} [{status}]" + (f": {counts}" if counts else ""))
+    if len(failing) > _MAX_PARTITIONS:
+        lines.append(f"  ... {len(failing) - _MAX_PARTITIONS} more failing partitions")
     return lines
 
 
@@ -150,6 +193,17 @@ def _metric_lines(check: CheckResult) -> list[str]:
     return lines
 
 
+def _artifact_lines(check: CheckResult) -> list[str]:
+    if not check.artifacts:
+        return []
+    lines = ["Artifacts (paths relative to the report folder):"]
+    for artifact in check.artifacts[:_MAX_ARTIFACTS]:
+        lines.append(f"  - {artifact_label(artifact.kind)}: {artifact.path}")
+    if len(check.artifacts) > _MAX_ARTIFACTS:
+        lines.append(f"  ... {len(check.artifacts) - _MAX_ARTIFACTS} more artifacts")
+    return lines
+
+
 def _waiver_text(check: CheckResult) -> str:
     waiver = check.waiver
     if waiver is None:
@@ -161,28 +215,72 @@ def _waiver_text(check: CheckResult) -> str:
         parts.append(f"expires {waiver.expires}")
     if waiver.approved_by:
         parts.append(f"approved by {waiver.approved_by}")
+    if waiver.column:
+        parts.append(f"column {waiver.column}")
     parts.append(f"selector {waiver.selector}")
     return "WAIVED: " + ", ".join(parts)
 
 
-def _add_testcase(suite_element: ET.Element, entry: CheckEntry) -> None:
+def _case_properties(case: ET.Element, check: CheckResult, mark: str | None) -> None:
+    """Test case properties for waived checks, expired waivers, and baseline changes."""
+    props: dict[str, object | None] = {}
+    waiver = check.waiver
+    if check.status is Status.WAIVED:
+        props["waived"] = "true"
+        if waiver is not None:
+            props.update(
+                {
+                    "waiver.reason": truncate(waiver.reason, _MAX_MESSAGE),
+                    "waiver.ticket": waiver.ticket,
+                    "waiver.expires": waiver.expires,
+                    "waiver.approved_by": waiver.approved_by,
+                    "waiver.selector": waiver.selector,
+                    "waiver.column": waiver.column,
+                }
+            )
+    elif waiver is not None and waiver.expired:
+        props.update(
+            {
+                "waiver.expired": "true",
+                "waiver.expires": waiver.expires,
+                "waiver.ticket": waiver.ticket,
+                "waiver.selector": waiver.selector,
+            }
+        )
+    if mark:
+        props["baseline"] = mark
+    present = {name: value for name, value in props.items() if value is not None}
+    if not present:
+        return
+    properties = _sub(case, "properties")
+    for name, value in present.items():
+        _sub(properties, "property", {"name": name, "value": value})
+
+
+def _add_testcase(suite_element: ET.Element, entry: CheckEntry, mark: str | None = None) -> None:
     check = entry.check
     case = _sub(
         suite_element,
         "testcase",
         {"classname": entry.location, "name": check.check_id, "time": _seconds(check.duration_ms)},
     )
+    _case_properties(case, check, mark)
     status = check.status
     if status is Status.FAILED:
+        message = headline(check)
+        if waiver_expired(check):
+            message = f"{message} [waiver expired]"
         _text_element(
             case,
             "failure",
-            "\n".join(_outcome_lines(entry)),
-            {"message": truncate(headline(check), _MAX_MESSAGE), "type": check.type},
+            "\n".join(_outcome_lines(entry, mark)),
+            {"message": truncate(message, _MAX_MESSAGE), "type": check.type},
         )
     elif status is Status.ERROR:
         error = check.error
         body = [f"Check: {check.check_id}", f"Table: {entry.location}"]
+        if mark:
+            body.append(f"Baseline: {mark} failure")
         if error is not None and error.hint:
             body.append(f"Hint: {error.hint}")
         if error is not None and error.traceback:
@@ -201,7 +299,7 @@ def _add_testcase(suite_element: ET.Element, entry: CheckEntry) -> None:
     elif status is Status.SKIPPED:
         _sub(case, "skipped", {"message": truncate(headline(check), _MAX_MESSAGE)})
     elif status is Status.WARNING:
-        text = "\n".join([f"WARNING: {headline(check)}", *_outcome_lines(entry)])
+        text = "\n".join([f"WARNING: {headline(check)}", *_outcome_lines(entry, mark)])
         _text_element(case, "system-out", text)
     elif status is Status.WAIVED:
         _text_element(case, "system-out", _waiver_text(check))
@@ -231,6 +329,30 @@ def _suite_ms(suite: SuiteResult) -> float:
     return sum(check.duration_ms or 0.0 for check in _suite_checks(suite))
 
 
+def _run_properties(run: RunResult) -> dict[str, object | None]:
+    """Suite properties describing the run: interruption, baseline comparison, and waivers."""
+    props: dict[str, object | None] = {
+        "interrupted": "true" if run.interrupted else None,
+        "resumed_from_checkpoint": "true" if run.resumed_from_checkpoint else None,
+    }
+    baseline = run.baseline
+    if baseline is not None:
+        props.update(
+            {
+                "baseline_run_id": baseline.baseline_run_id,
+                "baseline_policy": baseline.policy,
+                "baseline_new_failures": len(baseline.new_failures),
+                "baseline_resolved": len(baseline.resolved),
+                "baseline_persisting": len(baseline.persisting),
+            }
+        )
+    waivers = waiver_statuses(run)
+    if waivers:
+        for status, count in waiver_counts(waivers).items():
+            props[f"waivers_{status}"] = count
+    return props
+
+
 def build_junit(run: RunResult, options: ReportOptions) -> ET.Element:
     """Build the ``<testsuites>`` element for ``run``."""
     suite_ms = [_suite_ms(suite) for suite in run.suites]
@@ -245,6 +367,8 @@ def build_junit(run: RunResult, options: ReportOptions) -> ET.Element:
 
     score = quality_score(run)
     env = run.environment
+    marks = baseline_marks(run)
+    run_props = _run_properties(run)
     entries_by_suite: dict[int, list[CheckEntry]] = {}
     for entry in iter_entries(run):
         entries_by_suite.setdefault(id(entry.suite), []).append(entry)
@@ -271,12 +395,13 @@ def build_junit(run: RunResult, options: ReportOptions) -> ET.Element:
             "dvf_version": env.dvf_version,
             "profile": env.profile,
             "git_sha": env.git_sha,
+            **run_props,
         }
         for name, value in props.items():
             if value is not None:
                 _sub(properties, "property", {"name": name, "value": value})
         for entry in entries_by_suite.get(id(suite), []):
-            _add_testcase(suite_element, entry)
+            _add_testcase(suite_element, entry, marks.get(entry.check.check_id))
     return root
 
 

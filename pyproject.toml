@@ -60,8 +60,32 @@ polars = [
 postgres = [
     "psycopg[binary]>=3.2",
 ]
+mysql = [
+    "pymysql>=1.1",
+]
+mssql = [
+    "mssql-python>=0.13",
+]
+oracle = [
+    "oracledb>=2.4",
+]
+snowflake = [
+    "snowflake-connector-python>=3.12",
+]
+bigquery = [
+    "google-cloud-bigquery>=3.25",
+]
+redshift = [
+    "redshift-connector>=2.1",
+]
+databricks = [
+    "databricks-sql-connector>=4.0",
+]
+excel = [
+    "openpyxl>=3.1",
+]
 all = [
-    "dvf[polars,postgres]",
+    "dvf[polars,postgres,mysql,mssql,oracle,snowflake,bigquery,redshift,databricks,excel]",
 ]
 
 [project.scripts]
@@ -73,6 +97,7 @@ dev = [
   "jsonschema>=4.22",
   "mypy>=1.11",
   "nox>=2024.4.15",
+  "openpyxl>=3.1",
   "polars>=1.20,<2",
   "pre-commit>=3.7",
   "psycopg[binary]>=3.2",

@@ -9,6 +9,7 @@ SAP normalizers are declared in the registry and arrive with the SAP pack (Phase
 
 from __future__ import annotations
 
+import functools
 import unicodedata
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
@@ -92,6 +93,16 @@ class Lower(StringNormalizer):
         return None if value is None else simple_lower(str(value))
 
 
+@functools.lru_cache(maxsize=1)
+def _expanding_upper() -> tuple[str, ...]:
+    """Characters whose full upper-case mapping is not one character (including ``ß``)."""
+    return tuple(
+        c
+        for c in map(chr, range(0x110000))
+        if not 0xD800 <= ord(c) <= 0xDFFF and len(c.upper()) != 1
+    )
+
+
 class Upper(StringNormalizer):
     """Upper-case strings, one character at a time."""
 
@@ -99,7 +110,18 @@ class Upper(StringNormalizer):
         return dialect.upper(expr)
 
     def to_polars(self, expr: pl.Expr, ctype: CanonicalType) -> pl.Expr:
-        return expr.str.replace_all("ß", "ẞ", literal=True).str.to_uppercase()
+        import polars as pl
+
+        from dvf.normalize.canonical import _python_map
+
+        # Polars applies the full mapping (U+1F80 becomes two letters); strings holding such a
+        # character take the per-character reference instead.
+        special = expr.str.contains_any(list(_expanding_upper()))
+        return (
+            pl.when(special)
+            .then(_python_map(expr, lambda v: None if v is None else simple_upper(v), pl.String))
+            .otherwise(expr.str.to_uppercase())
+        )
 
     def to_python(self, value: Any, ctype: CanonicalType) -> Any:
         return None if value is None else simple_upper(str(value))
@@ -135,7 +157,9 @@ class NullIfEmpty(StringNormalizer):
     """Treat empty strings as NULL."""
 
     def to_sql(self, expr: str, dialect: Dialect, ctype: CanonicalType) -> str:
-        return f"NULLIF({expr}, '')"
+        # By length: Oracle stores '' as NULL, SQL Server's = '' ignores trailing spaces, and
+        # MySQL's default collation equates ignorable characters with ''.
+        return f"(CASE WHEN {dialect.length(expr)} = 0 THEN NULL ELSE {expr} END)"
 
     def to_polars(self, expr: pl.Expr, ctype: CanonicalType) -> pl.Expr:
         import polars as pl
@@ -164,7 +188,8 @@ class StripLeadingZeros(StringNormalizer):
 
     def to_sql(self, expr: str, dialect: Dialect, ctype: CanonicalType) -> str:
         stripped = dialect.trim(expr, "ltrim", "0")
-        return f"(CASE WHEN {stripped} = '' AND {expr} <> '' THEN '0' ELSE {stripped} END)"
+        empty = f"COALESCE({dialect.length(stripped)}, 0) = 0"
+        return f"(CASE WHEN {empty} AND {dialect.length(expr)} > 0 THEN '0' ELSE {stripped} END)"
 
     def to_polars(self, expr: pl.Expr, ctype: CanonicalType) -> pl.Expr:
         import polars as pl

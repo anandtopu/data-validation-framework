@@ -28,6 +28,7 @@ from dvf.core.errors import PlanError
 from dvf.core.types import CanonicalType
 from dvf.normalize.canonical import (
     CanonSpec,
+    Kind,
     PairSpec,
     canonical_sql,
     numeric_sql,
@@ -221,6 +222,8 @@ class ComparisonPlan:
     columns: list[PlannedColumn]
     source_dialect: Dialect
     target_dialect: Dialect
+    notes: list[str] = field(default_factory=list)
+    """Caveats about the canonical forms, such as normalization a dialect cannot apply."""
 
     @property
     def hashed(self) -> list[PlannedColumn]:
@@ -231,7 +234,7 @@ class ComparisonPlan:
         return [c for c in self.columns if not c.pair_spec.hashable]
 
     def describe(self) -> list[str]:
-        return [c.describe() for c in self.keys + self.columns]
+        return [c.describe() for c in self.keys + self.columns] + list(self.notes)
 
 
 NormalizerFactory = Callable[[NormalizerRef], Normalizer]
@@ -366,6 +369,22 @@ def build_plan(
             f"Table '{table.label}' has no key columns, so rows cannot be paired.",
             hint="Set 'keys' (for example keys: [id]) or 'keys: auto' to use the primary key.",
         )
+    notes: list[str] = []
+    form = normalization.unicode_form
+    has_text = any(
+        Kind.TEXT in (c.pair_spec.source.kind, c.pair_spec.target.kind) for c in keys + columns
+    )
+    if form != "none" and has_text:
+        for side, dialect in (("source", source_dialect), ("target", target_dialect)):
+            if not dialect.supports_unicode_form(form):
+                notes.append(
+                    f"Unicode {form} normalization is not available in {dialect.name}; "
+                    f"{side} text is compared without it"
+                )
     return ComparisonPlan(
-        keys=keys, columns=columns, source_dialect=source_dialect, target_dialect=target_dialect
+        keys=keys,
+        columns=columns,
+        source_dialect=source_dialect,
+        target_dialect=target_dialect,
+        notes=notes,
     )

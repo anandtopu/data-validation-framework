@@ -73,7 +73,8 @@ suites:
         target: { path: orders.parquet }
         keys: [order_id]
         comparison:
-          strategies: [row_count, aggregate]
+          # hash_bucket compares bucket checksums first and moves only the differing rows.
+          strategies: [row_count, aggregate, hash_bucket]
           group_by: [order_date]
         checks:
           - type: referential_integrity
@@ -83,6 +84,15 @@ suites:
             name: shipped_after_ordered
             expression: shipped_at IS NULL OR shipped_at >= ordered_at
           - { type: freshness, column: ordered_at, max_age: 2d, severity: warning }
+
+waivers:
+  # An accepted difference: city names keep trailing spaces until the curated job trims them.
+  # The other differing columns still fail, so the comparison stays failed.
+  - check: customers.customers.compare.column_mismatch
+    column: city
+    reason: The curated job pads city names; trimming is scheduled
+    ticket: DQ-1042
+    expires: 2099-12-31
 
 reports:
   formats: [html, json, junit, markdown]

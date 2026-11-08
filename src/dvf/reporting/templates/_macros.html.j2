@@ -4,6 +4,14 @@
 <span class="badge b-{{ status }}">{{ status }}</span>
 {%- endmacro %}
 
+{% macro check_link(link) -%}
+{% if link.anchor %}<a href="#{{ link.anchor }}"><code>{{ link.check_id }}</code></a>{% else %}<code>{{ link.check_id }}</code>{% endif %}
+{%- endmacro %}
+
+{% macro baseline_tag(mark) -%}
+{% if mark %}<span class="tag tag-{{ mark }}" title="{{ 'Fails now but not in the baseline run' if mark == 'new' else 'Also failed in the baseline run' }}">{{ mark }}</span>{% endif %}
+{%- endmacro %}
+
 {% macro value(v) -%}
 {% if v is none %}<span class="null">{{ v|fmt }}</span>
 {%- elif v is structured %}<pre class="wrap">{{ v|pretty }}</pre>

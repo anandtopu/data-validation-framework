@@ -18,8 +18,12 @@ from dvf.reporting._common import (
     DASH,
     ELLIPSIS,
     FAILURE_STATUSES,
+    INTERRUPTED_NOTICE,
+    RESUMED_NOTICE,
     STATUS_RANK,
     CheckEntry,
+    artifact_label,
+    baseline_marks,
     dataset_count,
     format_count,
     format_datetime,
@@ -30,13 +34,17 @@ from dvf.reporting._common import (
     headline,
     issue_sort_key,
     iter_entries,
+    partition_table,
     quality_score,
     report_artifact,
     report_title,
     sorted_classifications,
     status_counts,
     top_issues,
+    trend_series,
     truncate,
+    waiver_counts,
+    waiver_statuses,
     write_text,
 )
 
@@ -54,6 +62,8 @@ _MAX_CELL = 200
 _MAX_TEXT = 500
 _MAX_COLUMNS = 5
 _MAX_HINTS = 3
+_MAX_EXPIRED = 5
+_MAX_TREND = 6
 _OMITTED_NOTE = "{ellipsis} {count} more checks omitted; see the HTML or JSON report."
 
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]<>|&~])")
@@ -107,8 +117,66 @@ def _unexpected(check: CheckResult) -> str:
 # ---------------------------------------------------------------------- sections
 
 
+def _notices(run: RunResult) -> list[str]:
+    lines: list[str] = []
+    if run.interrupted:
+        lines += [f"> **Interrupted:** {md_escape(INTERRUPTED_NOTICE, _MAX_TEXT)}", ""]
+    if run.resumed_from_checkpoint:
+        lines += [f"> **Resumed:** {md_escape(RESUMED_NOTICE, _MAX_TEXT)}", ""]
+    return lines
+
+
+def _history(run: RunResult) -> list[str]:
+    """Baseline comparison, waiver usage, and quality trend lines (only those present)."""
+    lines: list[str] = []
+    baseline = run.baseline
+    if baseline is not None:
+        lines.append(
+            f"**Baseline:** {len(baseline.new_failures)} new, {len(baseline.resolved)} resolved, "
+            f"{len(baseline.persisting)} persisting failures vs run "
+            f"{md_code(baseline.baseline_run_id)}"
+        )
+    waivers = waiver_statuses(run)
+    if waivers:
+        parts = [
+            f"**{n} {status}**" if status == "expired" and n else f"{n} {md_escape(status, 40)}"
+            for status, n in waiver_counts(waivers).items()
+        ]
+        lines.append("**Waivers:** " + ", ".join(parts))
+    series = trend_series(run)
+    if series:
+        shown = series[-_MAX_TREND:]
+        points = " → ".join(
+            format_pct(point.quality_score) + (" (this run)" if current else "")
+            for point, current in shown
+        )
+        earlier = f"{ELLIPSIS} → " if len(series) > len(shown) else ""
+        lines.append(f"**Quality trend:** {earlier}{points}")
+    if lines:
+        lines = [line + "  " for line in lines[:-1]] + [lines[-1], ""]
+    expired = [waiver for waiver in waivers if waiver.status == "expired"]
+    if expired:
+        lines += ["**Expired waivers** (their failures stand until renewed or removed):", ""]
+        for waiver in expired[:_MAX_EXPIRED]:
+            details = [md_code(waiver.selector)]
+            if waiver.column:
+                details.append(f"column {md_code(waiver.column)}")
+            if waiver.ticket:
+                details.append(f"ticket {md_escape(waiver.ticket, 80)}")
+            if waiver.expires:
+                details.append(f"expired {md_escape(waiver.expires, 40)}")
+            checks = len(waiver.checks)
+            details.append(f"{checks} check{'' if checks == 1 else 's'}")
+            lines.append(f"- {' · '.join(details)} {DASH} {md_escape(waiver.reason, _MAX_TEXT)}")
+        if len(expired) > _MAX_EXPIRED:
+            lines.append(f"- {ELLIPSIS} {len(expired) - _MAX_EXPIRED} more expired waivers")
+        lines.append("")
+    return lines
+
+
 def _header(run: RunResult, options: ReportOptions, counts: dict[Status, int]) -> list[str]:
     lines = [f"# {md_escape(report_title(run, options))}: {run.status.value.upper()}", ""]
+    lines += _notices(run)
     lines.append(
         f"Run {md_code(run.run_id)} · project {md_escape(run.project)} · started "
         f"{format_datetime(run.started_at)} · duration {format_duration(run.duration_ms)}"
@@ -130,6 +198,7 @@ def _header(run: RunResult, options: ReportOptions, counts: dict[Status, int]) -
         f"**Rows compared:** {format_count(run.summary.rows_compared)} · "
         f"**Duration:** {format_duration(run.duration_ms)}",
         "",
+        *_history(run),
         "## Checks by status",
         "",
         "| Status | Checks |",
@@ -178,13 +247,21 @@ def _tables(run: RunResult) -> list[str]:
     return lines
 
 
-def _top_failure(number: int, entry: CheckEntry) -> list[str]:
+def _top_failure(number: int, entry: CheckEntry, mark: str | None = None) -> list[str]:
     check = entry.check
     indent = " " * len(f"{number}. ")
+    flag = {"new": " · **new since baseline**", "persisting": " · persisting"}.get(mark or "", "")
     lines = [
         f"{number}. {_status(check.status)} · {check.severity.value} · {md_code(check.check_id)} "
-        f"({md_escape(entry.location)}) {DASH} {md_escape(headline(check), _MAX_TEXT)}"
+        f"({md_escape(entry.location)}) {DASH} {md_escape(headline(check), _MAX_TEXT)}{flag}"
     ]
+    waiver = check.waiver
+    if waiver is not None and waiver.expired:
+        when = f" {md_escape(waiver.expires, 40)}" if waiver.expires else ""
+        ticket = f" ({md_escape(waiver.ticket, 80)})" if waiver.ticket else ""
+        lines.append(
+            f"{indent}- Waiver expired{when}{ticket}: {md_escape(waiver.reason, _MAX_TEXT)}"
+        )
     outcome: list[str] = []
     if check.observed is not None or check.expected is not None:
         outcome.append(
@@ -204,6 +281,7 @@ def _top_failure(number: int, entry: CheckEntry) -> list[str]:
             f"{indent}- {md_code(mismatch.column)}: {format_count(mismatch.mismatch_count)} "
             f"mismatches ({format_pct(mismatch.mismatch_pct)})"
             + (f": {classes}" if classes else "")
+            + (" · waived" if mismatch.waived else "")
         )
         lines += [
             f"{indent}  - Hint: {md_escape(h, _MAX_TEXT)}" for h in mismatch.hints[:_MAX_HINTS]
@@ -220,22 +298,49 @@ def _top_failure(number: int, entry: CheckEntry) -> list[str]:
         )
     if len(failing) > _MAX_COLUMNS:
         lines.append(f"{indent}- {ELLIPSIS} {len(failing) - _MAX_COLUMNS} more failing metrics")
+    partitions = partition_table(check)
+    failing_partitions = partitions.failing() if partitions is not None else []
+    if partitions is not None and failing_partitions:
+        names = ", ".join(
+            md_code(format_value(row.get("name"), limit=80))
+            for row in failing_partitions[:_MAX_COLUMNS]
+        )
+        more = (
+            f" and {len(failing_partitions) - _MAX_COLUMNS} more"
+            if len(failing_partitions) > _MAX_COLUMNS
+            else ""
+        )
+        lines.append(
+            f"{indent}- Failing partitions: {len(failing_partitions)} of "
+            f"{len(partitions.rows)} ({names}{more})"
+        )
     if check.error is not None:
         error = f"{check.error.type}: {check.error.message}"
         hint = f" · Hint: {md_escape(check.error.hint, _MAX_TEXT)}" if check.error.hint else ""
         lines.append(f"{indent}- Error: {md_escape(error, _MAX_TEXT)}{hint}")
     lines += [f"{indent}- Hint: {md_escape(h, _MAX_TEXT)}" for h in check.hints[:_MAX_HINTS]]
+    if check.artifacts:
+        shown = ", ".join(
+            f"{md_escape(artifact_label(a.kind), 40)} {md_code(truncate(a.path, _MAX_CELL))}"
+            for a in check.artifacts[:_MAX_COLUMNS]
+        )
+        more = (
+            f", {ELLIPSIS} {len(check.artifacts) - _MAX_COLUMNS} more"
+            if len(check.artifacts) > _MAX_COLUMNS
+            else ""
+        )
+        lines.append(f"{indent}- Artifacts: {shown}{more}")
     return lines
 
 
-def _top_failures(entries: list[CheckEntry]) -> list[str]:
+def _top_failures(entries: list[CheckEntry], marks: dict[str, str]) -> list[str]:
     lines = ["## Top failures", ""]
     top = top_issues(entries, _MAX_TOP, FAILURE_STATUSES)
     if not top:
         lines += ["No failed or errored checks.", ""]
         return lines
     for number, entry in enumerate(top, start=1):
-        lines += _top_failure(number, entry)
+        lines += _top_failure(number, entry, marks.get(entry.check.check_id))
     lines.append("")
     return lines
 
@@ -259,6 +364,9 @@ def _detail_row(entry: CheckEntry) -> str:
     if check.status is Status.WAIVED and check.waiver is not None:
         ticket = f" ({check.waiver.ticket})" if check.waiver.ticket else ""
         message = f"Waived: {check.waiver.reason}{ticket}"
+    elif check.waiver is not None and check.waiver.expired:
+        when = f" {check.waiver.expires}" if check.waiver.expires else ""
+        message = f"Waiver expired{when}: {message}"
     return _row(
         [
             _status(check.status),
@@ -309,7 +417,7 @@ def render_markdown(run: RunResult, options: ReportOptions) -> str:
     head = [
         *_header(run, options, counts),
         *_tables(run),
-        *_top_failures(entries),
+        *_top_failures(entries, baseline_marks(run)),
         *_extra_sections(options),
     ]
     footer = (

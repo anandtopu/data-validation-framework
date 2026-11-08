@@ -109,6 +109,20 @@ class PostgresConnector(Connector):
         assert self._con is not None
         return self._con
 
+    def is_transient(self, exc: BaseException) -> bool:
+        psycopg = _import_psycopg()
+        cause = exc.__cause__ if exc.__cause__ is not None else exc
+        if isinstance(cause, psycopg.errors.QueryCanceled):  # statement_timeout: not transient
+            return False
+        if isinstance(
+            cause,
+            psycopg.errors.SerializationFailure
+            | psycopg.errors.DeadlockDetected
+            | psycopg.OperationalError,
+        ):
+            return True
+        return super().is_transient(exc)
+
     def server_version(self) -> str | None:
         version = self.connection.info.server_version
         return f"PostgreSQL {version // 10000}.{version % 10000}"

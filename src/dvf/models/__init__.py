@@ -16,6 +16,7 @@ from dvf.core.types import (
 from dvf.models.results import (
     RESULTS_SCHEMA_VERSION,
     ArtifactRef,
+    BaselineComparison,
     CheckResult,
     ColumnMismatch,
     ColumnProfile,
@@ -33,7 +34,9 @@ from dvf.models.results import (
     SampleSet,
     SuiteResult,
     TimingBreakdown,
+    TrendPoint,
     WaiverApplied,
+    WaiverStatus,
     aggregate_status,
     make_check_id,
 )
@@ -41,6 +44,7 @@ from dvf.models.results import (
 __all__ = [
     "RESULTS_SCHEMA_VERSION",
     "ArtifactRef",
+    "BaselineComparison",
     "CanonicalType",
     "CheckResult",
     "ColumnMismatch",
@@ -71,7 +75,9 @@ __all__ = [
     "Status",
     "SuiteResult",
     "TimingBreakdown",
+    "TrendPoint",
     "WaiverApplied",
+    "WaiverStatus",
     "aggregate_status",
     "classify",
     "from_sap_ddic",

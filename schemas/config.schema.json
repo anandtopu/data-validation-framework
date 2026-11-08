@@ -586,7 +586,7 @@
           "anyOf": [
             {
               "default": 256,
-              "description": "Number of hash buckets for ``hash_bucket``.",
+              "description": "Number of first-level hash buckets for ``hash_bucket``.",
               "exclusiveMinimum": 0,
               "maximum": 1000000,
               "title": "Buckets",
@@ -596,6 +596,47 @@
               "$ref": "#/$defs/Interpolation"
             }
           ]
+        },
+        "drilldown_fanout": {
+          "anyOf": [
+            {
+              "default": 16,
+              "description": "Sub-buckets (``hash_bucket``) or key segments (``bisect``) per mismatched bucket or segment.",
+              "maximum": 1024,
+              "minimum": 2,
+              "title": "Drilldown Fanout",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "drilldown_threshold": {
+          "anyOf": [
+            {
+              "default": 10000,
+              "description": "Stop drilling down once the mismatched buckets or segments hold at most this many rows,\nand fetch their row hashes.",
+              "exclusiveMinimum": 0,
+              "title": "Drilldown Threshold",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "partitions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartitionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Compare row-level strategies partition by partition."
         },
         "group_by": {
           "description": "Columns for grouped counts and control totals (for example company code, period).",
@@ -1580,12 +1621,13 @@
     },
     "ExecutionConfig": {
       "additionalProperties": false,
-      "description": "Concurrency, timeouts, and retries.",
+      "description": "Concurrency, timeouts, retries, local engine resources, and checkpoints.",
       "properties": {
         "max_parallel_tables": {
           "anyOf": [
             {
               "default": 4,
+              "description": "Tables validated at the same time (project-level setting).",
               "exclusiveMinimum": 0,
               "title": "Max Parallel Tables",
               "type": "integer"
@@ -1599,6 +1641,7 @@
           "anyOf": [
             {
               "default": 2,
+              "description": "Default cap on tables using one connection at the same time; a connection's own\n``max_parallel_queries`` overrides it.",
               "exclusiveMinimum": 0,
               "title": "Max Queries Per Connection",
               "type": "integer"
@@ -1625,6 +1668,7 @@
           "anyOf": [
             {
               "default": 2,
+              "description": "Retries of a query that failed with a transient error (lost connection, deadlock, timeout).",
               "minimum": 0,
               "title": "Retries",
               "type": "integer"
@@ -1638,6 +1682,7 @@
           "anyOf": [
             {
               "default": 2.0,
+              "description": "First retry delay in seconds; it doubles on each retry.",
               "minimum": 0,
               "title": "Retry Backoff S",
               "type": "number"
@@ -1646,6 +1691,80 @@
               "$ref": "#/$defs/Interpolation"
             }
           ]
+        },
+        "memory_limit": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "pattern": "^\\d+(\\.\\d+)?\\s*(B|KB|MB|GB|TB|KiB|MiB|GiB|TiB)$",
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Memory limit of the local DuckDB engine, such as ``4GB``. It spills to disk beyond it.",
+          "title": "Memory Limit"
+        },
+        "threads": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Threads of the local DuckDB engine (default: all cores).",
+          "title": "Threads"
+        },
+        "temp_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Folder for the local engine's spill files (default: the system temporary folder).",
+          "title": "Temp Dir"
+        },
+        "checkpoints": {
+          "anyOf": [
+            {
+              "default": true,
+              "description": "Save finished tables and partitions so ``dvf run --resume RUN_ID`` can continue a run.",
+              "title": "Checkpoints",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "state_dir": {
+          "default": ".dvf",
+          "description": "Folder (relative to the configuration) for checkpoints, run results, and history.",
+          "title": "State Dir",
+          "type": "string"
         }
       },
       "title": "ExecutionConfig",
@@ -2765,7 +2884,7 @@
     },
     "MysqlConnectionConfig": {
       "additionalProperties": false,
-      "description": "MySQL and MariaDB",
+      "description": "MySQL 8.0.17 or later",
       "properties": {
         "type": {
           "const": "mysql",
@@ -3976,6 +4095,156 @@
         "table"
       ],
       "title": "ParentRef",
+      "type": "object"
+    },
+    "PartitionConfig": {
+      "additionalProperties": false,
+      "description": "Split row-level comparisons into independent partitions.\n\nEach partition is compared on its own (and checkpointed), and the partition results are\ncombined. Use exactly one of ``values``, ``ranges``, ``hash_buckets``, or ``predicates``.",
+      "properties": {
+        "column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Paired column (target or source name) for ``values`` and ``ranges``.",
+          "title": "Column"
+        },
+        "values": {
+          "anyOf": [
+            {
+              "const": "auto",
+              "type": "string"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One partition per value; ``auto`` reads the distinct values from the source. Rows with\nother values or NULL form one more partition.",
+          "title": "Values"
+        },
+        "ranges": {
+          "anyOf": [
+            {
+              "items": {},
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Ascending boundaries; partitions are below the first, between neighbors, from the last\nupward, and NULL.",
+          "title": "Ranges"
+        },
+        "hash_buckets": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 4096,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Split by a hash of the key columns into this many partitions.",
+          "title": "Hash Buckets"
+        },
+        "predicates": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PartitionPredicate"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Predicates"
+        },
+        "max_partitions": {
+          "anyOf": [
+            {
+              "default": 1000,
+              "exclusiveMinimum": 0,
+              "maximum": 100000,
+              "title": "Max Partitions",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        }
+      },
+      "title": "PartitionConfig",
+      "type": "object"
+    },
+    "PartitionPredicate": {
+      "additionalProperties": false,
+      "description": "A named partition given as a SQL predicate per side.",
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.=-]+$",
+              "title": "Name",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Predicate on the target; defaults to the source predicate.",
+          "title": "Target"
+        }
+      },
+      "required": [
+        "name",
+        "source"
+      ],
+      "title": "PartitionPredicate",
       "type": "object"
     },
     "PatternSpec": {
@@ -5893,6 +6162,107 @@
       "title": "Side",
       "type": "string"
     },
+    "SinkConfig": {
+      "additionalProperties": false,
+      "description": "Where run and check results are written as tables, for dashboards.",
+      "properties": {
+        "type": {
+          "anyOf": [
+            {
+              "description": "Sink type, for example ``duckdb``, ``sqlite``, or ``postgres``.",
+              "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$",
+              "title": "Type",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "default": true,
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Database file for file-based sinks (relative to the configuration).",
+          "title": "Path"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Connection URL for server sinks. Treated as a secret.",
+          "title": "Url"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema"
+        },
+        "table_prefix": {
+          "anyOf": [
+            {
+              "default": "dvf_",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "title": "Table Prefix",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "options": {
+          "additionalProperties": true,
+          "title": "Options",
+          "type": "object"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "SinkConfig",
+      "type": "object"
+    },
     "SlackNotificationConfig": {
       "additionalProperties": false,
       "description": "Slack webhook",
@@ -7725,6 +8095,14 @@
     },
     "history": {
       "$ref": "#/$defs/HistoryConfig"
+    },
+    "sinks": {
+      "description": "Result sinks that receive every run's results as tables.",
+      "items": {
+        "$ref": "#/$defs/SinkConfig"
+      },
+      "title": "Sinks",
+      "type": "array"
     },
     "notifications": {
       "items": {

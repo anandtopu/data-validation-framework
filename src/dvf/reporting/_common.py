@@ -9,6 +9,7 @@ from __future__ import annotations
 import heapq
 import json
 import math
+import re
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
@@ -20,11 +21,14 @@ from typing import TYPE_CHECKING, Any
 from dvf.core.enums import Dimension, Status
 from dvf.models.results import (
     ArtifactRef,
+    BaselineComparison,
     CheckResult,
     DatasetPairResult,
     RunResult,
     SuiteResult,
     TimingBreakdown,
+    TrendPoint,
+    WaiverStatus,
 )
 
 if TYPE_CHECKING:
@@ -221,6 +225,187 @@ def sorted_classifications(classifications: Mapping[str, int]) -> list[tuple[str
     return sorted(classifications.items(), key=lambda item: (-item[1], item[0]))
 
 
+def top_classification(classifications: Mapping[str, int]) -> str | None:
+    """The most frequent mismatch class, or None when there are none."""
+    ranked = sorted_classifications(classifications)
+    return ranked[0][0] if ranked else None
+
+
+# ---------------------------------------------------------------------- run history and waivers
+
+WAIVER_STATUS_ORDER: tuple[str, ...] = ("applied", "expired", "unused")
+"""Display order of :attr:`WaiverStatus.status` values."""
+
+INTERRUPTED_NOTICE = (
+    "This run was interrupted before every table finished; resume it with 'dvf run --resume'."
+)
+RESUMED_NOTICE = "Some tables were loaded from this run's checkpoints instead of being re-run."
+
+
+def run_notices(run: RunResult) -> list[str]:
+    """Banner messages for runs that were interrupted or resumed from checkpoints."""
+    notices = []
+    if run.interrupted:
+        notices.append(INTERRUPTED_NOTICE)
+    if run.resumed_from_checkpoint:
+        notices.append(RESUMED_NOTICE)
+    return notices
+
+
+def waiver_expired(check: CheckResult) -> bool:
+    """Whether the check matched a waiver that has expired (so its failure stands)."""
+    return check.waiver is not None and check.waiver.expired
+
+
+def waiver_statuses(run: RunResult) -> list[WaiverStatus]:
+    """How each waiver was used in the run.
+
+    Uses :attr:`RunResult.waivers`. Results written before it existed (schema 1.0) are handled by
+    deriving the applied and expired waivers from the checks' own waiver records.
+    """
+    if run.waivers:
+        return list(run.waivers)
+    derived: dict[tuple[str, str | None, bool], WaiverStatus] = {}
+    for check in run.iter_checks():
+        waiver = check.waiver
+        if waiver is None:
+            continue
+        key = (waiver.selector, waiver.column, waiver.expired)
+        status = derived.get(key)
+        if status is None:
+            status = WaiverStatus(
+                selector=waiver.selector,
+                column=waiver.column,
+                reason=waiver.reason,
+                ticket=waiver.ticket,
+                approved_by=waiver.approved_by,
+                expires=waiver.expires,
+                status="expired" if waiver.expired else "applied",
+            )
+            derived[key] = status
+        if check.check_id not in status.checks:
+            status.checks.append(check.check_id)
+    return list(derived.values())
+
+
+def waiver_counts(waivers: Iterable[WaiverStatus]) -> dict[str, int]:
+    """Number of waivers per status: applied, expired, unused, then any other status seen."""
+    counter = Counter(waiver.status for waiver in waivers)
+    counts = {status: counter.pop(status, 0) for status in WAIVER_STATUS_ORDER}
+    counts.update(sorted(counter.items()))
+    return counts
+
+
+def baseline_summary(baseline: BaselineComparison) -> str:
+    """For example ``3 new, 1 resolved, 5 persisting failures vs run 20261105T...``."""
+    return (
+        f"{len(baseline.new_failures)} new, {len(baseline.resolved)} resolved, "
+        f"{len(baseline.persisting)} persisting failures vs run {baseline.baseline_run_id}"
+    )
+
+
+def baseline_marks(run: RunResult) -> dict[str, str]:
+    """Check ID to ``new`` or ``persisting``, for checks failing relative to the baseline."""
+    baseline = run.baseline
+    if baseline is None:
+        return {}
+    marks = dict.fromkeys(baseline.persisting, "persisting")
+    marks.update(dict.fromkeys(baseline.new_failures, "new"))
+    return marks
+
+
+def trend_series(run: RunResult) -> list[tuple[TrendPoint, bool]]:
+    """Earlier runs (oldest first) followed by this run, each flagged ``True`` if it is this run.
+
+    Empty when the result has no trend.
+    """
+    if not run.trend:
+        return []
+    counts = Counter(check.status for check in run.iter_checks())
+    current = TrendPoint(
+        run_id=run.run_id,
+        started_at=run.started_at,
+        status=run.status,
+        quality_score=quality_score(run),
+        checks=sum(counts.values()),
+        failed=counts[Status.FAILED],
+        errors=counts[Status.ERROR],
+    )
+    return [*((point, False) for point in run.trend), (current, True)]
+
+
+# ---------------------------------------------------------------------- artifacts and partitions
+
+ARTIFACT_LABELS = {
+    "extract": "Mismatch extract",
+    "repro_sql": "Repro SQL",
+    "repro_config": "Repro config",
+    "report": "Report",
+}
+
+
+def artifact_label(kind: str) -> str:
+    """A readable label for an artifact kind (``repro_sql`` is shown as ``Repro SQL``)."""
+    return ARTIFACT_LABELS.get(kind, kind)
+
+
+PARTITION_FIELDS: tuple[tuple[str, str], ...] = (
+    ("name", "Partition"),
+    ("status", "Status"),
+    ("source_rows", "Source rows"),
+    ("target_rows", "Target rows"),
+    ("mismatched", "Mismatched"),
+    ("missing_in_target", "Missing in target"),
+    ("extra_in_target", "Extra in target"),
+)
+"""Known keys of ``details["partitions"]`` entries, as (key, heading), in display order."""
+
+_PASSING_PARTITION = frozenset({"passed", "skipped", "waived"})
+_MAX_PARTITION_EXTRA_KEYS = 8
+
+
+@dataclass(frozen=True, slots=True)
+class PartitionTable:
+    """Per-partition outcomes of a comparison, taken from ``details["partitions"]``."""
+
+    columns: list[tuple[str, str]]
+    """(key, heading) pairs: the known keys present in any row, then up to 8 other keys."""
+    rows: list[Mapping[str, Any]]
+
+    def failing(self) -> list[Mapping[str, Any]]:
+        """Rows whose status is set and is not passed, skipped, or waived."""
+        return [
+            row
+            for row in self.rows
+            if row.get("status") is not None and str(row["status"]) not in _PASSING_PARTITION
+        ]
+
+
+def partition_table(check: CheckResult) -> PartitionTable | None:
+    """The check's per-partition details, or None when ``details["partitions"]`` is absent or
+    not a list of mappings."""
+    raw = check.details.get("partitions")
+    if not isinstance(raw, list):
+        return None
+    rows: list[Mapping[str, Any]] = [row for row in raw if isinstance(row, Mapping)]
+    if not rows:
+        return None
+    present: dict[str, None] = {}
+    for row in rows:
+        present.update(dict.fromkeys(str(key) for key in row))
+    known = [(key, label) for key, label in PARTITION_FIELDS if key in present]
+    known_keys = {key for key, _ in PARTITION_FIELDS}
+    extra = [(key, key) for key in present if key not in known_keys]
+    return PartitionTable(known + extra[:_MAX_PARTITION_EXTRA_KEYS], rows)
+
+
+def details_without_partitions(check: CheckResult) -> dict[str, Any]:
+    """``check.details`` minus ``partitions`` when that entry is shown as its own table."""
+    if partition_table(check) is None:
+        return dict(check.details)
+    return {key: value for key, value in check.details.items() if key != "partitions"}
+
+
 # ---------------------------------------------------------------------- formatting
 
 
@@ -317,6 +502,16 @@ def format_group(group: Mapping[str, Any] | None) -> str:
     if not group:
         return DASH
     return ", ".join(f"{key}={format_value(val, none='NULL')}" for key, val in group.items())
+
+
+_INVALID_XML_CHARS = re.compile(r"[^\t\n\r\x20-퟿-�\U00010000-\U0010ffff]")
+"""Characters XML 1.0 does not allow, including lone surrogates."""
+
+
+def xml_text(value: object) -> str:
+    """``value`` as text that is valid in XML 1.0 content and attributes."""
+    text = value if isinstance(value, str) else str(value)
+    return _INVALID_XML_CHARS.sub("", text)
 
 
 # ---------------------------------------------------------------------- output

@@ -25,7 +25,7 @@ _CONNECTORS: list[tuple[str, type[conn.ConnectionConfig], str, str | None]] = [
         None,
     ),
     ("postgres", conn.DatabaseConnection, "PostgreSQL", "postgres"),
-    ("mysql", conn.DatabaseConnection, "MySQL and MariaDB", "mysql"),
+    ("mysql", conn.DatabaseConnection, "MySQL 8.0.17 or later", "mysql"),
     ("mssql", conn.DatabaseConnection, "SQL Server, Azure SQL, Synapse, and Fabric SQL", "mssql"),
     ("oracle", conn.DatabaseConnection, "Oracle Database", "oracle"),
     ("db2", conn.DatabaseConnection, "IBM Db2", "db2"),
@@ -194,12 +194,16 @@ def _attach_implementations(registry: Registry) -> None:
     from dvf.checks.quality import BUILTIN_CHECKS
     from dvf.compare.comparators import BUILTIN_COMPARATORS
     from dvf.connectors.duckdb import DuckDBConnector, FileConnector
+    from dvf.connectors.mssql import MSSQLConnector
+    from dvf.connectors.mysql import MySQLConnector
+    from dvf.connectors.oracle import OracleConnector
     from dvf.connectors.postgres import PostgresConnector
     from dvf.connectors.sqlite import SQLiteConnector
     from dvf.engines.polars_engine import PolarsEngine
     from dvf.engines.sql_engines import AutoEngine, DuckDBEngine, PushdownEngine
     from dvf.normalize.normalizers import BUILTIN_NORMALIZERS
     from dvf.reporting.builtin import BUILTIN_REPORTERS
+    from dvf.sinks.builtin import BUILTIN_SINKS
 
     groups: list[tuple[PluginKind, dict[str, Any]]] = [
         (
@@ -209,12 +213,16 @@ def _attach_implementations(registry: Registry) -> None:
                 "files": FileConnector,
                 "sqlite": SQLiteConnector,
                 "postgres": PostgresConnector,
+                "mysql": MySQLConnector,
+                "mssql": MSSQLConnector,
+                "oracle": OracleConnector,
             },
         ),
         (PluginKind.CHECK, dict(BUILTIN_CHECKS)),
         (PluginKind.COMPARATOR, dict(BUILTIN_COMPARATORS)),
         (PluginKind.NORMALIZER, dict(BUILTIN_NORMALIZERS)),
         (PluginKind.REPORTER, dict(BUILTIN_REPORTERS)),
+        (PluginKind.SINK, dict(BUILTIN_SINKS)),
         (
             PluginKind.ENGINE,
             {
@@ -225,6 +233,8 @@ def _attach_implementations(registry: Registry) -> None:
             },
         ),
     ]
+    groups.append((PluginKind.CONNECTOR, _beta_connectors()))
+    beta = set(_BETA_CONNECTORS)
     for kind, implementations in groups:
         for name, implementation in implementations.items():
             declared = registry.find(kind, name)
@@ -236,4 +246,23 @@ def _attach_implementations(registry: Registry) -> None:
                 config_model=declared.config_model if declared else None,
                 origin="builtin",
                 extra=declared.extra if declared else None,
+                maturity="beta" if kind is PluginKind.CONNECTOR and name in beta else "stable",
             )
+
+
+_BETA_CONNECTORS = ("snowflake", "bigquery", "redshift", "databricks")
+"""Implemented and unit-tested, but not yet verified against a live service (shown as ``beta``)."""
+
+
+def _beta_connectors() -> dict[str, Any]:
+    from dvf.connectors.bigquery import BigQueryConnector
+    from dvf.connectors.databricks import DatabricksConnector
+    from dvf.connectors.redshift import RedshiftConnector
+    from dvf.connectors.snowflake import SnowflakeConnector
+
+    return {
+        "snowflake": SnowflakeConnector,
+        "bigquery": BigQueryConnector,
+        "redshift": RedshiftConnector,
+        "databricks": DatabricksConnector,
+    }

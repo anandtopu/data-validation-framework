@@ -15,6 +15,9 @@ from typing import Any, ClassVar
 
 from dvf.core.errors import DvfError
 
+HASH_SPACE = 2**32
+"""Size of the integer space :meth:`Dialect.hash_int` maps 8 hexadecimal digits into."""
+
 WHITESPACE_CLASS = "[ \t\n\r]+"
 """Characters that ``collapse_whitespace`` replaces with one space (ASCII whitespace only)."""
 
@@ -29,6 +32,8 @@ class Dialect:
     name: ClassVar[str] = "ansi"
     text_type: ClassVar[str] = "VARCHAR"
     double_type: ClassVar[str] = "DOUBLE PRECISION"
+    full_outer_join: ClassVar[bool] = True
+    """Whether ``FULL OUTER JOIN`` is supported (MySQL has none; diffs emulate it)."""
 
     # ------------------------------------------------------------------ basics
     def quote(self, identifier: str) -> str:
@@ -68,10 +73,37 @@ class Dialect:
         return f"GREATEST({', '.join(exprs)})"
 
     def concat(self, *exprs: str) -> str:
+        """Concatenate expressions that are never NULL (used to serialize canonical rows)."""
         return "(" + " || ".join(exprs) + ")"
 
     def md5(self, expr: str) -> str:
+        """Lower-case hexadecimal MD5 digest of the UTF-8 bytes of ``expr``."""
         return f"MD5({expr})"
+
+    # ------------------------------------------------------------------ hashing and buckets
+    def hash_int(self, hex_expr: str, offset: int) -> str:
+        """The integer value (0 to 2**32 - 1) of the 8 hexadecimal digits of ``hex_expr`` that
+        start at 0-based ``offset``. ``hex_expr`` is a lower-case MD5 digest from :meth:`md5`."""
+        raise UnsupportedFeatureError(f"{self.name} cannot convert hexadecimal digits to integers")
+
+    def int_div(self, numerator: str, denominator: int) -> str:
+        """Floor division of a non-negative integer expression by a positive integer constant,
+        returning an integer."""
+        # Divide an exact multiple, so engines that round quotients to a few decimals stay exact.
+        d = int(denominator)
+        return f"CAST((({numerator}) - MOD({numerator}, {d})) / {d} AS BIGINT)"
+
+    def bucket(self, int_expr: str, granularity: int) -> str:
+        """The bucket (0 to ``granularity - 1``) of a 32-bit hash integer from :meth:`hash_int`."""
+        return self.int_div(f"({int_expr}) * {int(granularity)}", HASH_SPACE)
+
+    def supports_unicode_form(self, form: str) -> bool:
+        """Whether :meth:`unicode_normalize` supports ``form`` (``NFC``, ``NFD``, ``NFKC``, ``NFKD``).
+
+        When it does not, canonicalization skips Unicode normalization on this side and says so
+        in the normalization notes.
+        """
+        return True
 
     def boolean(self, condition: str) -> str:
         """A boolean expression usable in SELECT lists (SQLite has no boolean type)."""
@@ -159,6 +191,19 @@ class DuckDBDialect(Dialect):
     text_type = "VARCHAR"
     double_type = "DOUBLE"
 
+    def concat(self, *exprs: str) -> str:
+        # A chain of || is quadratic in DuckDB; concat() is linear (and operands are never NULL).
+        return f"concat({', '.join(exprs)})"
+
+    def hash_int(self, hex_expr: str, offset: int) -> str:
+        return f"CAST('0x' || SUBSTRING({hex_expr}, {int(offset) + 1}, 8) AS BIGINT)"
+
+    def int_div(self, numerator: str, denominator: int) -> str:
+        return f"(({numerator}) // {int(denominator)})"
+
+    def supports_unicode_form(self, form: str) -> bool:
+        return form == "NFC"
+
     def unicode_normalize(self, expr: str, form: str) -> str:
         if form != "NFC":
             raise UnsupportedFeatureError(
@@ -223,6 +268,12 @@ class PostgresDialect(Dialect):
 
     def unicode_normalize(self, expr: str, form: str) -> str:
         return f"NORMALIZE({expr}, {form})"
+
+    def hash_int(self, hex_expr: str, offset: int) -> str:
+        return f"(('x' || SUBSTRING({hex_expr} FROM {int(offset) + 1} FOR 8))::BIT(32)::BIGINT)"
+
+    def int_div(self, numerator: str, denominator: int) -> str:
+        return f"(CAST({numerator} AS BIGINT) / {int(denominator)})"
 
     def regex_match(self, expr: str, pattern: str, *, full: bool) -> str:
         if full:
@@ -299,6 +350,12 @@ class SQLiteDialect(Dialect):
     def md5(self, expr: str) -> str:
         return f"dvf_md5({expr})"
 
+    def hash_int(self, hex_expr: str, offset: int) -> str:
+        return f"dvf_hash_int({hex_expr}, {int(offset)})"
+
+    def int_div(self, numerator: str, denominator: int) -> str:
+        return f"(({numerator}) / {int(denominator)})"
+
     def lower(self, expr: str) -> str:
         return f"dvf_lower({expr})"
 
@@ -358,13 +415,42 @@ _DIALECTS: dict[str, Dialect] = {
     d.name: d for d in (DuckDBDialect(), PostgresDialect(), SQLiteDialect())
 }
 
+_DIALECT_MODULES = {
+    "mysql": "dvf.sql.mysql",
+    "mssql": "dvf.sql.mssql",
+    "oracle": "dvf.sql.oracle",
+    "snowflake": "dvf.sql.snowflake",
+    "bigquery": "dvf.sql.bigquery",
+    "redshift": "dvf.sql.redshift",
+    "databricks": "dvf.sql.databricks",
+}
+"""Dialects defined in their own modules, imported on first use. Each module defines ``DIALECT``."""
+
+
+def register_dialect(dialect: Dialect) -> None:
+    """Make ``dialect`` available to :func:`get_dialect` (plugins may add their own)."""
+    _DIALECTS[dialect.name] = dialect
+
 
 def get_dialect(name: str) -> Dialect:
-    """Return the dialect called ``name`` (``duckdb``, ``postgres``, or ``sqlite``)."""
-    try:
-        return _DIALECTS[name]
-    except KeyError:
-        known = ", ".join(sorted(_DIALECTS))
-        raise UnsupportedFeatureError(
-            f"SQL generation for dialect '{name}' is not available yet; supported: {known}"
-        ) from None
+    """Return the dialect called ``name`` (for example ``duckdb``, ``postgres``, or ``mssql``)."""
+    found = _DIALECTS.get(name)
+    if found is not None:
+        return found
+    module_name = _DIALECT_MODULES.get(name)
+    if module_name is not None:
+        import importlib
+
+        try:
+            module = importlib.import_module(module_name)
+        except ModuleNotFoundError as exc:
+            if exc.name != module_name:
+                raise
+        else:
+            dialect: Dialect = module.DIALECT
+            register_dialect(dialect)
+            return dialect
+    known = ", ".join(sorted({*_DIALECTS, *_DIALECT_MODULES}))
+    raise UnsupportedFeatureError(
+        f"SQL generation for dialect '{name}' is not available; known dialects: {known}"
+    )

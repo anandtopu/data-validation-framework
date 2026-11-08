@@ -1,0 +1,4 @@
+{#- Run-level notices: interrupted runs and runs resumed from checkpoints. -#}
+{% for notice in notices %}
+<div class="banner banner-{{ notice.kind }}" role="status"><strong>{{ notice.label }}</strong> {{ notice.text }}</div>
+{% endfor %}

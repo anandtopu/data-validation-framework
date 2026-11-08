@@ -268,6 +268,22 @@ def _hana_tinyint(_: list[str]) -> CanonicalType:
     return CanonicalType.integer(8, unsigned=True)
 
 
+def _oracle_number(params: list[str]) -> CanonicalType:
+    """``NUMBER(p, 0)`` with up to 18 digits holds integers; other forms are decimals."""
+    precision = _int_param(params, 0)
+    scale = _int_param(params, 1) if len(params) > 1 else 0
+    if precision is not None and scale == 0 and precision <= 18:
+        bits = 8 if precision <= 2 else 16 if precision <= 4 else 32 if precision <= 9 else 64
+        return CanonicalType.integer(bits)
+    return CanonicalType.decimal(precision, scale if precision is not None else None)
+
+
+def _tsql_float(params: list[str]) -> CanonicalType:
+    """SQL Server ``FLOAT(n)``: 4 bytes up to 24 mantissa bits, otherwise 8 (the default 53)."""
+    bits = _int_param(params, 0)
+    return CanonicalType.float(32 if bits is not None and bits <= 24 else 64)
+
+
 _OVERRIDES: dict[str | None, dict[str, _Override]] = {
     "oracle": {
         # Oracle DATE stores a time component to the second.
@@ -280,6 +296,10 @@ _OVERRIDES: dict[str | None, dict[str, _Override]] = {
         "ROWID": lambda _: CanonicalType.string(18),
         "UROWID": lambda p: CanonicalType.string(_int_param(p) or 4000),
         "XMLTYPE": lambda _: CanonicalType.string(),
+        "NUMBER": _oracle_number,
+        "NCLOB": lambda _: CanonicalType.string(unicode=True),
+        "INTERVAL DAY TO SECOND": lambda _: CanonicalType.simple(LogicalType.INTERVAL),
+        "INTERVAL YEAR TO MONTH": lambda _: CanonicalType.simple(LogicalType.INTERVAL),
     },
     "hana": {
         "SECONDDATE": lambda _: CanonicalType.timestamp(0),
@@ -308,6 +328,8 @@ _OVERRIDES: dict[str | None, dict[str, _Override]] = {
         # In SQL Server, TIMESTAMP is a synonym for ROWVERSION, not a date-time type.
         "TIMESTAMP": lambda _: CanonicalType.binary(8, fixed=True),
         "SQL_VARIANT": lambda _: CanonicalType.unknown(),
+        "FLOAT": _tsql_float,
+        "NTEXT": lambda _: CanonicalType.string(unicode=True),
     },
     "mysql": {
         "YEAR": lambda _: CanonicalType.integer(16),
@@ -323,7 +345,10 @@ def _apply_override(native: str, dialect: str | None) -> CanonicalType | None:
         return None
     match = _SIMPLE_TYPE_RE.match(native)
     if not match:
-        return None
+        # Parameters inside the name, such as INTERVAL DAY(2) TO SECOND(6).
+        bare = " ".join(re.sub(r"\([^()]*\)", " ", native).upper().split())
+        handler = overrides.get(bare)
+        return handler([]) if handler is not None else None
     base = " ".join(match.group(1).upper().split())
     handler = overrides.get(base)
     if handler is None:

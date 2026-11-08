@@ -3,18 +3,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 from dvf.compare.plan import ColumnPairing, ComparisonPlan
 from dvf.config.models import NormalizationConfig, SuiteConfig, TableConfig
 from dvf.core.datasets import DatasetSchema
 from dvf.core.enums import Side
 from dvf.core.errors import PlanError
-from dvf.engines.base import DiffSide
+from dvf.engines.base import DiffSide, EngineResources
 from dvf.execution.context import QueryRecorder, RunInfo
 from dvf.models.results import DatasetPairResult
 from dvf.plugins.registry import Registry
 from dvf.security.masking import Privacy
+
+
+class PartitionCheckpoints(Protocol):
+    """Saved partition results of one table, so a resumed run skips finished partitions."""
+
+    def load(self, key: str) -> dict[str, Any] | None: ...
+
+    def save(self, key: str, data: dict[str, Any]) -> None: ...
 
 
 @dataclass
@@ -40,6 +48,8 @@ class ComparisonContext:
     run: RunInfo
     state: dict[str, Any] = field(default_factory=dict)
     """Scratch space shared between strategies (for example a finished diff)."""
+    resources: EngineResources = field(default_factory=EngineResources)
+    checkpoints: PartitionCheckpoints | None = None
 
     @property
     def plan(self) -> ComparisonPlan | None:

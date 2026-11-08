@@ -62,12 +62,77 @@ Settings flow from `defaults` to each suite (`suites[].defaults`) and from the s
 | `waivers` | Accepted differences with a reason, ticket, approver, and expiry date |
 | `reports` | Formats, output folder, branding, extracts, template overrides |
 | `history` | Run history store and baseline |
+| `sinks` | Databases that receive every run's results as tables, for dashboards |
 | `notifications` | Teams, Slack, webhook, or email notifications by run status |
 | `plugins` | Local plugin `paths` (relative to the config) and `modules` |
 | `extends`, `profiles` | Layering, applied by the loader |
 
-!!! note "What Phase 1 applies at run time"
-    These settings are validated but not applied yet: `waivers` and `history` (Phase 2), `notifications` (Phase 4), `reports.extracts`, and `defaults.execution` parallelism and retries (Phase 2). `as_of` raises a clear error on connectors without time travel. Everything else, including `privacy`, `normalization`, `comparison`, and `reports`, takes effect. See [Checks and comparisons](validations.md) for every validation.
+!!! note "What applies at run time"
+    Every section takes effect except `notifications`, which arrive in Phase 4 (they are validated). `as_of` raises a clear error on connectors without time travel. See [Checks and comparisons](validations.md) for every validation and [Debugging and operations](debugging.md) for checkpoints, history, extracts, and repro files.
+
+### Execution
+
+`defaults.execution` is read at project level:
+
+```yaml
+defaults:
+  execution:
+    max_parallel_tables: 4          # tables validated at the same time
+    max_queries_per_connection: 2   # default cap per connection (a connection's max_parallel_queries wins)
+    query_timeout_s: 1800           # applied to connections that set none
+    retries: 2                      # transient errors (lost connection, deadlock) are retried
+    retry_backoff_s: 2.0            # first delay; it doubles on each retry
+    memory_limit: 4GB               # local DuckDB engine; it spills to disk beyond it
+    threads: 8                      # local DuckDB engine threads (default: all cores)
+    temp_dir: ./.dvf/spill          # local engine spill folder
+    checkpoints: true               # save finished tables so --resume can continue a run
+    state_dir: .dvf                 # checkpoints, saved results, and the default history store
+```
+
+Each table holds one slot of every connection it uses while it runs, so `max_parallel_queries: 1` on a production source makes tables take turns on it while other connections keep working.
+
+### Waivers
+
+```yaml
+waivers:
+  - check: finance.customers.compare.column_mismatch   # check ID; glob patterns allowed
+    column: customer_name                               # optional: one column of a comparison
+    reason: Names longer than 35 characters are truncated by design
+    ticket: CR-1042
+    approved_by: finance-ba
+    expires: 2027-01-31
+```
+
+An active waiver turns a failed or warning result into `waived` (counted as passed in the quality score). A column waiver waives a column comparison only when every differing column is waived; otherwise the waived columns are marked and the result still fails. Expired waivers never apply: the failure stands and the reports flag the expired waiver.
+
+### History
+
+```yaml
+history:
+  enabled: true
+  store: duckdb:///./.dvf/history.duckdb   # or sqlite:///path/history.sqlite
+  baseline: last_passed                    # last_run, last_passed, none, or a run ID
+  retention_runs: 50                       # keep the newest runs only (optional)
+```
+
+### Result sinks
+
+```yaml
+sinks:
+  - { type: duckdb, path: ./results/dvf.duckdb }
+  - { type: postgres, url: "${secret:env:RESULTS_DB_URL}", schema: dvf, table_prefix: dvf_ }
+```
+
+Sinks (`duckdb`, `sqlite`, `postgres`) append each run to `<prefix>runs`, `<prefix>checks`, and `<prefix>column_mismatches`, replacing the rows of a run written twice. A failing sink is logged and noted in the results' metadata; it never fails the run.
+
+### Reports and extracts
+
+```yaml
+reports:
+  formats: [json, html, junit, markdown, excel]   # excel needs pip install 'dvf[excel]'
+  output_dir: ./reports/${run.date}/${run.id}
+  extracts: { enabled: true, format: parquet, max_rows_per_check: 100000 }
+```
 
 ### Tables
 

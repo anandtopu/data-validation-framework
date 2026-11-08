@@ -130,7 +130,7 @@ def test_connections_test_command(tmp_path: Path) -> None:
         "version: 1\nproject: {name: x}\nconnections:\n"
         "  mem: {type: duckdb}\n  files: {type: files, path: ./data}\n"
         "  gone: {type: files, path: ./missing}\n  lite: {type: sqlite, database: none.sqlite}\n"
-        "  sf: {type: snowflake, account: acme}\n",
+        "  td: {type: teradata, host: example.invalid}\n",
         encoding="utf-8",
     )
     result = runner.invoke(app, ["connections", "test", str(config)])

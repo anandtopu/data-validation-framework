@@ -16,6 +16,12 @@
     <div class="kpi s-{{ status }}"><div class="l">{{ status }}</div><div class="v">{{ counts[status]|count }}</div></div>
     {% endfor %}
   </div>
+  {% if baseline_view or waivers %}
+  <p class="history-line">
+    {% if baseline_view %}<a href="#baseline">Baseline</a>: {{ baseline_view.text }}.{% endif %}
+    {% if waivers %}<a href="#waivers">Waivers</a>: {% for status, n in waiver_counts.items() %}<span class="{{ 'bad' if status == 'expired' and n else '' }}">{{ n }} {{ status }}</span>{% if not loop.last %}, {% endif %}{% endfor %}.{% endif %}
+  </p>
+  {% endif %}
   <div class="summary-grid">
     <div>
       <h3>Checks by status</h3>
@@ -41,7 +47,7 @@
           <td>{{ loop.index }}</td>
           <td>{{ m.badge(c.check.status) }}</td>
           <td><span class="sev sev-{{ c.check.severity }}">{{ c.check.severity }}</span></td>
-          <td><a href="#{{ c.anchor }}"><code>{{ c.check.check_id }}</code></a></td>
+          <td><a href="#{{ c.anchor }}"><code>{{ c.check.check_id }}</code></a> {{ m.baseline_tag(c.baseline) }}</td>
           <td>{{ c.location }}</td>
           <td>{{ c.headline|short }}</td>
           <td class="num">{{ c.check.unexpected_count|count }}{% if c.check.unexpected_pct is not none %} ({{ c.check.unexpected_pct|pct }}){% endif %}</td>

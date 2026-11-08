@@ -90,6 +90,13 @@ class DuckDBConnector(Connector):
             self._con.close()
             self._con = None
 
+    def fork(self) -> Connector:
+        """A session on the same database (a DuckDB cursor), safe to use from another thread."""
+        twin = type(self)(self.name, self.config, self.base_dir)
+        twin._con = self.connection.cursor()
+        twin._con.execute("SET TimeZone = 'UTC'")
+        return twin
+
     @property
     def connection(self) -> duckdb.DuckDBPyConnection:
         self.open()
@@ -107,11 +114,24 @@ class DuckDBConnector(Connector):
             raise ConnectorError(f"Query failed on connection '{self.name}': {exc}") from exc
 
     def iter_batches(self, sql: str, batch_size: int = 50_000) -> Iterator[pa.RecordBatch]:
+        # Bulk streams never depend on row order; preserving it makes DuckDB export Arrow on a
+        # single thread (about six times slower for wide projections).
+        con = self.connection
+        con.execute("SET preserve_insertion_order = false")
         try:
-            reader = self.connection.execute(sql).to_arrow_reader(batch_size)
+            reader = con.execute(sql).to_arrow_reader(batch_size)
             yield from reader
         except duckdb.Error as exc:
             raise ConnectorError(f"Query failed on connection '{self.name}': {exc}") from exc
+        finally:
+            con.execute("SET preserve_insertion_order = true")
+
+    def register_arrow(self, name: str, table: pa.Table) -> bool:
+        self.connection.register(name, table)
+        return True
+
+    def unregister_arrow(self, name: str) -> None:
+        self.connection.unregister(name)
 
     # ------------------------------------------------------------------ datasets
     def _reader(self, path: str, options: dict[str, Any]) -> str:

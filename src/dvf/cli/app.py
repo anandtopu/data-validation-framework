@@ -372,7 +372,8 @@ def plugins_list_command(
         OutputFormat, typer.Option("--format", help="Output format.")
     ] = OutputFormat.TEXT,
 ) -> None:
-    """List components: 'ready' ones have an implementation, 'declared' ones arrive in a later phase."""
+    """List components: 'ready' ones are implemented and verified, 'beta' ones are implemented but not
+    yet verified against a live system, and 'declared' ones arrive in a later phase."""
     registry = get_registry()
     _load_cli_plugins(ctx, registry)
     entries = registry.entries(kind)
@@ -406,14 +407,21 @@ def plugins_list_command(
     table.add_column("Status")
     table.add_column("Source")
     table.add_column("Description", overflow="fold")
+    styles = {"ready": "[green]ready[/]", "beta": "[yellow]beta[/]", "declared": "[dim]declared[/]"}
     for entry in entries:
-        status = "[green]ready[/]" if entry.ready else "[dim]declared[/]"
         table.add_row(
-            entry.kind.value, entry.name, status, escape(entry.source), escape(entry.description)
+            entry.kind.value,
+            entry.name,
+            styles[entry.status],
+            escape(entry.source),
+            escape(entry.description),
         )
     out.print(table)
-    ready = sum(1 for e in entries if e.ready)
-    out.print(f"{len(entries)} components: {ready} ready, {len(entries) - ready} declared.")
+    counts = {status: sum(1 for e in entries if e.status == status) for status in styles}
+    out.print(
+        f"{len(entries)} components: {counts['ready']} ready, {counts['beta']} beta "
+        f"(implemented, not yet verified against a live system), {counts['declared']} declared."
+    )
     if hooks:
         out.print("Hook plugins: " + ", ".join(escape(h) for h in hooks))
     for failure in registry.load_failures:
@@ -497,6 +505,24 @@ def _print_run(result: RunResult, artifacts: list[Any], verbose: bool) -> None:
         + (f"; quality score {score:.1f}" if score is not None else "")
         + f"; {(result.duration_ms or 0) / 1000:.1f}s"
     )
+    if result.baseline is not None:
+        b = result.baseline
+        out.print(
+            f"[dim]vs run {escape(b.baseline_run_id)} ({escape(b.policy)}):[/] "
+            f"{len(b.new_failures)} new, {len(b.resolved)} resolved, "
+            f"{len(b.persisting)} persisting failures"
+        )
+    expired = [w for w in result.waivers if w.status == "expired"]
+    applied = [w for w in result.waivers if w.status == "applied"]
+    if applied or expired:
+        out.print(
+            f"[dim]waivers:[/] {len(applied)} applied"
+            + (f", [red]{len(expired)} expired[/]" if expired else "")
+        )
+    if result.interrupted:
+        err.print(
+            f"[yellow]interrupted[/]: resume with 'dvf run CONFIG --resume {escape(result.run_id)}'"
+        )
     for artifact in artifacts:
         out.print(f"[dim]wrote[/] {escape(_display_file(artifact.path))}")
 
@@ -537,6 +563,8 @@ def _config_error(exc: ConfigError) -> typer.Exit:
     _print_diagnostics(exc.diagnostics)
     if not exc.diagnostics:
         err.print(f"[red]error[/] {escape(str(exc))}")
+    if exc.hint:
+        err.print(f"[dim]hint[/] {escape(exc.hint)}")
     return typer.Exit(ExitCode.CONFIG_ERROR)
 
 
@@ -567,10 +595,40 @@ def run_command(
         bool, typer.Option("--strict", help="Warnings also fail the run (exit 1).")
     ] = False,
     verbose: VerboseOption = False,
+    resume: Annotated[
+        str | None,
+        typer.Option(
+            "--resume", help="Continue an interrupted or killed run from its checkpoints."
+        ),
+    ] = None,
+    force_resume: Annotated[
+        bool, typer.Option("--force-resume", help="Resume even if the configuration changed.")
+    ] = False,
+    failed_from: Annotated[
+        str | None,
+        typer.Option(
+            "--failed-from", help="Run only the checks that failed or errored in this run."
+        ),
+    ] = None,
+    parallel: Annotated[
+        int | None,
+        typer.Option("--parallel", "-j", min=1, help="Tables to run at the same time."),
+    ] = None,
+    keep_temp: Annotated[
+        bool, typer.Option("--keep-temp", help="Keep the local engine's temporary files.")
+    ] = False,
+    no_history: Annotated[
+        bool, typer.Option("--no-history", help="Do not read or record run history.")
+    ] = False,
+    baseline: Annotated[
+        str | None,
+        typer.Option("--baseline", help="Compare with: last_run, last_passed, none, or a run ID."),
+    ] = None,
 ) -> None:
     """Run the validations in a configuration and write reports.
 
-    Exit codes: 0 passed, 1 validation failures, 2 execution errors, 3 configuration errors.
+    Exit codes: 0 passed, 1 validation failures, 2 execution errors (or an interrupted run),
+    3 configuration errors.
     """
     try:
         loaded = api.load_config(
@@ -589,6 +647,13 @@ def run_command(
             output_dir=output_dir,
             formats=formats,
             write_reports=not no_reports,
+            resume=resume,
+            force_resume=force_resume,
+            failed_from=failed_from,
+            parallel=parallel,
+            keep_temp=keep_temp,
+            history=not no_history,
+            baseline=baseline,
         )
     except ConfigError as exc:
         raise _config_error(exc) from exc
@@ -596,6 +661,287 @@ def run_command(
         raise _execution_error(exc) from exc
     _print_run(output.result, output.artifacts, verbose)
     _finish(output.result, fail_on, strict, min_score)
+
+
+@app.command("rerun")
+def rerun_command(
+    ctx: typer.Context,
+    run_id: Annotated[
+        str, typer.Argument(help="The run whose failed and errored checks to rerun.")
+    ],
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Configuration file (default: the one the run used)."),
+    ] = None,
+    output_dir: OutputDirOption = None,
+    no_reports: Annotated[
+        bool, typer.Option("--no-reports", help="Do not write report files.")
+    ] = False,
+    fail_on: FailOnOption = Severity.ERROR,
+    verbose: VerboseOption = False,
+) -> None:
+    """Run again only the checks that failed or errored in an earlier run."""
+    try:
+        if config is None:
+            handle = api.load_run(run_id)
+            if not handle.config_files:
+                raise ConfigError(
+                    f"Run {run_id} does not record its configuration file.",
+                    hint="Pass --config PATH.",
+                )
+            config = Path(handle.config_files[0])
+        loaded = api.load_config(config, plugins=_state(ctx).plugins)
+        output = api.run(
+            loaded, failed_from=run_id, output_dir=output_dir, write_reports=not no_reports
+        )
+    except ConfigError as exc:
+        raise _config_error(exc) from exc
+    except DvfError as exc:
+        raise _execution_error(exc) from exc
+    _print_run(output.result, output.artifacts, verbose)
+    _finish(output.result, fail_on, False, None)
+
+
+@app.command("explain")
+def explain_command(
+    ctx: typer.Context,
+    path: ConfigPath,
+    table: Annotated[str | None, typer.Option("--table", "-t", help="Only this table.")] = None,
+    suite: Annotated[str | None, typer.Option("--suite", help="Only tables of this suite.")] = None,
+    only: Annotated[
+        list[str] | None, typer.Option("--only", help="Selectors, as for dvf run. Repeatable.")
+    ] = None,
+    profile: ProfileOption = None,
+    output_format: Annotated[
+        OutputFormat, typer.Option("--format", help="text or json.")
+    ] = OutputFormat.TEXT,
+    no_sql: Annotated[bool, typer.Option("--no-sql", help="Leave out the generated SQL.")] = False,
+) -> None:
+    """Show the plan and the SQL each step would run, without running validations."""
+    from rich.syntax import Syntax
+
+    try:
+        loaded = api.load_config(path, profile=profile, plugins=_state(ctx).plugins)
+        report = api.explain(loaded, table=table, suite=suite, only=only or [])
+    except ConfigError as exc:
+        raise _config_error(exc) from exc
+    except DvfError as exc:
+        raise _execution_error(exc) from exc
+    if output_format is OutputFormat.JSON:
+        out.print_json(json.dumps(report.to_dict(), default=str))
+        return
+    caps = ", ".join(f"{k} {v}" for k, v in report.connection_caps.items())
+    out.print(
+        f"[bold]{escape(report.project)}[/]: up to {report.parallel_tables} tables at a time; "
+        f"connection caps: {escape(caps) or 'none'}"
+    )
+    for item in report.tables:
+        out.rule(f"{escape(item.suite)}.{escape(item.table)}")
+        out.print(f"source: {escape(item.source or '-')}   target: {escape(item.target or '-')}")
+        if item.strategies:
+            escalation = f" -> {item.on_mismatch} on mismatch" if item.on_mismatch else ""
+            out.print(
+                f"strategies: {escape(', '.join(item.strategies))}{escape(escalation)}; "
+                f"engine {escape(item.engine)}"
+                + (f" (row-level: {escape(item.row_engine)})" if item.row_engine else "")
+            )
+        for line in item.keys:
+            out.print(f"  key  {escape(line)}")
+        for line in item.columns:
+            out.print(f"  col  {escape(line)}")
+        if item.partitions:
+            out.print(
+                f"partitions ({len(item.partitions)}): "
+                + escape(", ".join(p["name"] for p in item.partitions[:20]))
+            )
+        for problem in item.problems:
+            out.print(f"[yellow]problem[/] {escape(problem)}")
+        if not no_sql:
+            for query in item.queries:
+                out.print(f"[dim]-- {escape(query.purpose)} ({query.side}, {query.dialect})[/]")
+                out.print(Syntax(query.sql, "sql", word_wrap=True))
+        for check in item.checks:
+            out.print(f"check [bold]{escape(check.check_id)}[/] ({check.side}, {check.severity})")
+            if check.sql and not no_sql:
+                out.print(Syntax(check.sql, "sql", word_wrap=True))
+
+
+@app.command("trace")
+def trace_command(
+    ctx: typer.Context,
+    path: ConfigPath,
+    table: Annotated[str, typer.Option("--table", "-t", help="Table name.")],
+    key: Annotated[
+        list[str], typer.Option("--key", "-k", help="Key value (repeat for composite keys).")
+    ],
+    suite: Annotated[str | None, typer.Option("--suite", help="Suite of the table.")] = None,
+    profile: ProfileOption = None,
+    output_format: Annotated[
+        OutputFormat, typer.Option("--format", help="text or json.")
+    ] = OutputFormat.TEXT,
+) -> None:
+    """Follow one record through both sides: raw value, each normalizer, canonical value, hash."""
+    try:
+        loaded = api.load_config(path, profile=profile, plugins=_state(ctx).plugins)
+        report = api.trace(loaded, table=table, keys=key, suite=suite)
+    except ConfigError as exc:
+        raise _config_error(exc) from exc
+    except DvfError as exc:
+        raise _execution_error(exc) from exc
+    if output_format is OutputFormat.JSON:
+        out.print_json(json.dumps(report.to_dict(), default=str))
+        return
+    out.print(
+        f"[bold]{escape(report.suite)}.{escape(report.table)}[/] key "
+        f"{escape(', '.join(report.key))} (canonical {escape(', '.join(str(k) for k in report.canonical_key))}): "
+        f"{report.source_rows} source row(s), {report.target_rows} target row(s)"
+    )
+    grid = Table(show_lines=False)
+    for name in ("Column", "Step", "Source", "Target", ""):
+        grid.add_column(name)
+    for column in report.columns:
+        s_row = column.source[0] if column.source else []
+        t_row = column.target[0] if column.target else []
+        mark = (
+            "" if column.equal is None else ("[green]=[/]" if column.equal else "[red]differs[/]")
+        )
+        width = max(len(s_row), len(t_row))
+        for i in range(width):
+            step = column.steps[i] if i < len(column.steps) else ""
+            grid.add_row(
+                escape(column.column) if i == 0 else "",
+                escape(step),
+                escape(repr(s_row[i])) if i < len(s_row) else "",
+                escape(repr(t_row[i])) if i < len(t_row) else "",
+                mark if i == width - 1 else "",
+            )
+    out.print(grid)
+    out.print(
+        f"row hash: source {escape(str(report.source_hashes[:1]))}, "
+        f"target {escape(str(report.target_hashes[:1]))}"
+    )
+    for note in report.notes:
+        out.print(f"[yellow]note[/] {escape(note)}")
+
+
+@app.command("debug")
+def debug_command(
+    run_id: Annotated[str, typer.Argument(help="Run ID, or the path of a results.json.")],
+    check_id: Annotated[
+        str | None, typer.Argument(help="Check ID (or its end); omit to list failed checks.")
+    ] = None,
+    config: Annotated[
+        Path | None, typer.Option("--config", "-c", help="Configuration (to find its .dvf folder).")
+    ] = None,
+    output_format: Annotated[
+        OutputFormat, typer.Option("--format", help="text or json.")
+    ] = OutputFormat.TEXT,
+) -> None:
+    """Drill into a check of an earlier run: evidence, mismatches, SQL, timing, and repro files."""
+    from rich.syntax import Syntax
+
+    try:
+        handle = api.load_run(run_id, config=config)
+        check = handle.check(check_id) if check_id else None
+    except ConfigError as exc:
+        raise _config_error(exc) from exc
+    if check is None:
+        failed = handle.failed()
+        if output_format is OutputFormat.JSON:
+            out.print_json(json.dumps([c.check_id for c in failed]))
+            return
+        out.print(f"run {escape(handle.result.run_id)}: {len(failed)} failed or errored check(s)")
+        for item in failed:
+            out.print(
+                f"{_status_text(item.status)} {escape(item.check_id)}: {escape(item.message or '')}"
+            )
+        return
+    result = check.result
+    if output_format is OutputFormat.JSON:
+        out.print_json(result.model_dump_json())
+        return
+    out.rule(escape(result.check_id))
+    out.print(f"{_status_text(result.status)} {escape(result.message or '')}")
+    fields = {
+        "type": result.type,
+        "severity": result.severity.value,
+        "engine": result.engine,
+        "observed": result.observed,
+        "expected": result.expected,
+        "unexpected": result.unexpected_count,
+        "total": result.total_count,
+        "duration ms": result.duration_ms,
+    }
+    for name, value in fields.items():
+        if value is not None:
+            out.print(f"  {name}: {escape(str(value))}")
+    if result.waiver is not None:
+        w = result.waiver
+        out.print(
+            f"  waiver: {escape(w.selector)} ({'expired' if w.expired else 'active'}): {escape(w.reason)}"
+        )
+    for hint in result.hints:
+        out.print(f"  [dim]hint:[/] {escape(hint)}")
+    for line in result.normalization:
+        out.print(f"  [dim]normalization:[/] {escape(line)}")
+    for mismatch in result.column_mismatches:
+        classes = ", ".join(f"{k} {v}" for k, v in mismatch.classifications.items())
+        out.print(
+            f"  column {escape(mismatch.column)}: {mismatch.mismatch_count:,} ({escape(classes)})"
+        )
+    if result.samples is not None:
+        grid = Table(*[escape(c) for c in result.samples.columns], title="samples")
+        for row in result.samples.rows[:20]:
+            grid.add_row(*[escape(str(v)) for v in row])
+        out.print(grid)
+    if result.error is not None:
+        out.print(f"[red]{escape(result.error.type)}[/]: {escape(result.error.message)}")
+        if result.error.traceback:
+            out.print(f"[dim]{escape(result.error.traceback)}[/]")
+    for query in result.queries:
+        out.print(
+            f"[dim]-- {query.side.value} ({query.dialect}, {query.duration_ms} ms, {query.rows_returned} rows)[/]"
+        )
+        out.print(Syntax(query.sql, "sql", word_wrap=True))
+    for artifact in result.artifacts:
+        base = handle.output_dir
+        location = (base / artifact.path) if base else Path(artifact.path)
+        out.print(f"  {escape(artifact.kind)}: {escape(str(location))}")
+
+
+@app.command("history")
+def history_command(
+    path: ConfigPath,
+    limit: Annotated[int, typer.Option("--limit", "-n", min=1, help="Runs to show.")] = 20,
+    output_format: Annotated[
+        OutputFormat, typer.Option("--format", help="text or json.")
+    ] = OutputFormat.TEXT,
+) -> None:
+    """List recent runs of the configuration's project."""
+    try:
+        runs = api.run_history(path, limit=limit)
+    except ConfigError as exc:
+        raise _config_error(exc) from exc
+    except DvfError as exc:
+        raise _execution_error(exc) from exc
+    if output_format is OutputFormat.JSON:
+        out.print_json(json.dumps(runs, default=str))
+        return
+    if not runs:
+        out.print("no runs recorded yet")
+        return
+    grid = Table("Run ID", "Started", "Status", "Score", "Checks", "Failed", "Errors")
+    for row in runs:
+        grid.add_row(
+            escape(row["run_id"]),
+            escape(str(row["started_at"])[:19]),
+            _status_text(Status(row["status"])),
+            "" if row["quality_score"] is None else f"{row['quality_score']:.1f}",
+            str(row["checks"]),
+            str(row["failed"]),
+            str(row["errors"]),
+        )
+    out.print(grid)
 
 
 @app.command("compare")

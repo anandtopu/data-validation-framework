@@ -19,9 +19,12 @@ class ConfigError(DvfError):
     ``diagnostics`` holds every problem found, so users can fix them in one pass.
     """
 
-    def __init__(self, message: str, diagnostics: Sequence[Diagnostic] = ()) -> None:
+    def __init__(
+        self, message: str, diagnostics: Sequence[Diagnostic] = (), *, hint: str | None = None
+    ) -> None:
         super().__init__(message)
         self.diagnostics: list[Diagnostic] = list(diagnostics)
+        self.hint = hint
 
     def __str__(self) -> str:
         base = super().__str__()

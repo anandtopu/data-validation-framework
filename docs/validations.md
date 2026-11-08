@@ -49,12 +49,16 @@ Configured under `comparison` on a table (or in `defaults`). Strategies run in o
 
 ```yaml
 comparison:
-  strategies: [row_count, aggregate, row_hash]
+  strategies: [row_count, aggregate, hash_bucket]
   on_mismatch: full_diff
   group_by: [company_code]          # grouped counts and control totals
   aggregates: [count, sum, min, max, null_count, count_distinct]
   tolerance: { numeric_abs: 0.005, row_count_pct: 0.1, timestamp: 1s }
   max_mismatch_rows: 100000         # mismatched values fetched for classification
+  buckets: 256                      # first-level buckets (hash_bucket, bisect)
+  drilldown_fanout: 16              # sub-buckets per differing bucket
+  drilldown_threshold: 10000        # rows per side at which drilling stops
+  partitions: { column: posting_date, ranges: ["2024-01-01", "2025-01-01"] }
 ```
 
 | Strategy | Catalog | What it compares |
@@ -63,7 +67,38 @@ comparison:
 | `aggregate` | REC-02 | per column: `count`, `sum`, `min`, `max`, `avg`, `count_distinct`, `null_count`, `sum_length`, overall or per group |
 | `profile` | REC-12 | per column profiles side by side (nulls, distinct values, min, max, mean, lengths); differences are warnings |
 | `row_hash` | REC-03, REC-04 | keys (missing, extra, duplicate, NULL) and a hash of each row's canonical columns |
+| `hash_bucket` | REC-03, REC-04 | bucket checksums inside each database, drilling into differing buckets; only their rows are diffed |
+| `bisect` | REC-03, REC-06 | the same over ranges of an integer key, so databases can use an index on the key |
 | `full_diff` | REC-03, REC-05 | keys, per-column mismatch counts and percentages, side-by-side samples, and classification |
+
+`row_hash` (and `full_diff`) compare every row: the local engine moves each row's key and hash. Use `hash_bucket` or `bisect` for large tables in different databases that are mostly identical: rows moved grow with the number of differences, not with the table size. When `full_diff` follows any of them, only the differing rows' values are fetched.
+
+### Checksum search
+
+`hash_bucket` and `bisect` work in rounds:
+
+1. Each database summarizes every bucket: row count, distinct keys, two sums of 32-bit row-hash prefixes, and, for floating-point columns, the non-NULL count, sum, and sum of absolute values.
+2. dvf compares the summaries and splits each differing bucket into `drilldown_fanout` sub-buckets.
+3. It stops when the differing buckets hold at most `drilldown_threshold` rows per side, or when splitting no longer narrows them down.
+4. The configured engine then diffs just those rows, exactly.
+
+`hash_bucket` buckets by a hash of the canonical key, so it works with any key types, including composite keys. `bisect` needs one integer key; each round reads only the key ranges still in question, which an index makes cheap.
+
+The comparison result reports the buckets compared at each level, the rows transferred, and the share of all rows they represent. Floating-point columns are compared per bucket by sums within tolerance (a near-certain test, not a proof), and exactly per row in differing buckets.
+
+### Partitions
+
+`comparison.partitions` splits row-level strategies into slices that are compared, and checkpointed, one at a time. The results add up to the table's result.
+
+| Setting | Partitions |
+|---|---|
+| `{column: country, values: auto}` | one per value found in the source, one for other values, one for NULL |
+| `{column: country, values: [DE, FR]}` | one per listed value, other values, and NULL |
+| `{column: posting_date, ranges: ["2024-01-01", "2025-01-01"]}` | below the first boundary, between boundaries, from the last, and NULL |
+| `{hash_buckets: 8}` | eight slices by a hash of the key, plus NULL keys |
+| `{predicates: [{name: emea, source: "region = 'EMEA'", target: "region_code = 'E'"}]}` | your predicates (make them cover every row) |
+
+Partition by a column whose value is the same on both sides, such as a key or a load date. A row whose partition value changed is counted as missing in one partition and extra in another, and the result warns about it.
 
 Row-level strategies need keys: `keys: [id]`, composite keys, renamed keys (`{source: KUNNR, target: customer_id, normalize: [strip_leading_zeros]}`), or `keys: auto` for the source primary key. Duplicate keys are counted per side and compared once.
 
@@ -127,3 +162,5 @@ Each mismatched value is labeled, and the dominant labels per column produce a h
 | `pushdown` | Inside the database; requires both datasets on the same connection |
 | `duckdb` | Each side is canonicalized in its own database and streamed into a local DuckDB that spills to disk |
 | `polars` | Raw values are fetched and canonicalized and diffed with Polars (`pip install 'dvf[polars]'`) |
+
+Full diffs run in two phases: keys and row hashes of every row first, then the full values of only the rows that differ. Duplicate keys are probed with a cheap query, and de-duplication runs only when a key repeats. `defaults.execution.memory_limit` (for example `4GB`), `threads`, and `temp_dir` bound the local DuckDB engine, which spills to disk beyond its memory limit.

@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import IO, Any
@@ -24,6 +27,31 @@ _HANDLER_MARKER = "_dvf_handler"
 class LogFormat(StrEnum):
     TEXT = "text"
     JSON = "json"
+
+
+_CONTEXT: ContextVar[dict[str, Any]] = ContextVar("dvf_log_context")
+
+
+@contextmanager
+def log_context(**fields: Any) -> Iterator[None]:
+    """Attach ``run_id``, ``suite``, ``table``, ``check_id``, or ``partition`` to every log record
+    emitted inside the block (in this thread or task)."""
+    current = _CONTEXT.get({})
+    token = _CONTEXT.set({**current, **{k: v for k, v in fields.items() if v is not None}})
+    try:
+        yield
+    finally:
+        _CONTEXT.reset(token)
+
+
+class ContextFilter(logging.Filter):
+    """Copies the :func:`log_context` fields onto log records (JSON logs include them)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for name, value in _CONTEXT.get({}).items():
+            if getattr(record, name, None) is None:
+                setattr(record, name, value)
+        return True
 
 
 class RedactingFilter(logging.Filter):
@@ -76,6 +104,7 @@ def configure_logging(
         console = Console(file=stream or sys.stderr, soft_wrap=True)
         handler = RichHandler(console=console, show_path=False, rich_tracebacks=False)
     setattr(handler, _HANDLER_MARKER, True)
+    handler.addFilter(ContextFilter())
     handler.addFilter(RedactingFilter(redactor))
     logger.addHandler(handler)
     logger.setLevel(level.upper())

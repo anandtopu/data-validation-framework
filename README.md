@@ -4,9 +4,9 @@
 
 `dvf` validates schemas and data quality, reconciles source and target datasets at scale, and produces detailed, auditable reports. It is built for migration projects (SAP, on-premise databases to cloud warehouses, SQL to NoSQL) and for data engineering pipelines (PySpark, Databricks, Parquet, Avro, JSON, CSV).
 
-> **Project status: Phase 1 (local MVP), pre-alpha.**
-> dvf reads, checks, and compares data from DuckDB, SQLite, PostgreSQL, and CSV, Parquet, and JSON files, and writes HTML, JSON, JUnit, and Markdown reports.
-> Scale features (bucketed hashing, parallel execution, history, waivers at run time) arrive in Phase 2; Spark, SAP, and NoSQL in Phase 3.
+> **Project status: Phase 2 (scale and debugging), pre-alpha.**
+> dvf checks and compares data in local files and databases (DuckDB, SQLite, PostgreSQL, SQL Server, Oracle, MySQL 8, and the beta Snowflake, BigQuery, Redshift, and Databricks connectors), scales to large tables with bucketed checksums and parallel execution, and explains every failure.
+> Spark, lakehouse formats, SAP, and NoSQL arrive in Phase 3.
 > See [ARCHITECTURE.md](ARCHITECTURE.md) for the roadmap and [BUILD_PROMPT.md](BUILD_PROMPT.md) for the full specification.
 
 ## What works today
@@ -16,23 +16,28 @@
 | `dvf init <dir> --example` | Creates a runnable local project with synthetic data and seeded discrepancies |
 | `dvf run <file>` | Runs schema checks, comparisons, and data quality checks, and writes reports |
 | `dvf compare <source> <target> -k <key>` | Compares two datasets without a configuration file |
+| `dvf run <file> --resume <run_id>` | Continues an interrupted or killed run from its checkpoints |
+| `dvf explain <file>` | Shows the plan and the SQL each step would run, without running it |
+| `dvf trace <file> --table <t> --key <k>` | Follows one record through every normalization step on both sides |
+| `dvf debug <run_id> [check]`, `dvf rerun <run_id>`, `dvf history <file>` | Drills into an earlier run, reruns what failed, lists runs |
 | `dvf report --from results.json -f html -o <dir>` | Re-renders reports from a results document, without touching data |
 | `dvf connections test <file>` | Opens every connection and runs a trivial query |
 | `dvf validate-config <file>` | Validates a configuration, reporting errors with file, line, and column |
 | `dvf config show <file>` | Prints the fully resolved configuration, with secrets redacted |
 | `dvf schema config` / `dvf schema results` | Exports JSON Schemas for IDE autocomplete and integrations |
-| `dvf plugins list` | Lists components and whether each is `ready` or `declared` (planned) |
+| `dvf plugins list` | Lists components: `ready`, `beta` (implemented, not yet verified against a live system), or `declared` (planned) |
 
-| Area | Ready in Phase 1 |
+| Area | Ready |
 |---|---|
-| Connectors | `duckdb`, `sqlite`, `postgres` (`pip install 'dvf[postgres]'`), `files` (CSV, TSV, Parquet, JSON, NDJSON) |
-| Engines | `auto`, `pushdown` (diff inside one database), `duckdb` (local, spills to disk), `polars` (`dvf[polars]`) |
+| Connectors | `duckdb`, `sqlite`, `files` (CSV, TSV, Parquet, JSON, NDJSON), `postgres`, `mssql`, `oracle`, `mysql` (each with its pip extra, for example `pip install 'dvf[mssql]'`); beta: `snowflake`, `bigquery`, `redshift`, `databricks` |
+| Engines | `auto`, `pushdown` (diff inside one database), `duckdb` (local, spills to disk, memory limit), `polars` (`dvf[polars]`); full diffs fetch values only for rows that differ |
 | Schema checks | Object existence, column presence, type compatibility, length and precision, nullability, constraints (SCH-01 to SCH-06) |
 | Data quality checks | `not_null`, `not_blank`, `null_ratio`, `unique`, `regex`, `allowed_values`, `range`, `length`, `referential_integrity`, `custom_sql`, `expression`, `row_count_range`, `freshness` |
-| Comparisons | `row_count` (grouped too), `aggregate` control totals, `profile`, `row_hash`, `full_diff` with mismatch classification and fix hints |
-| Reports | Self-contained HTML, canonical JSON, JUnit XML, Markdown |
+| Comparisons | `row_count` (grouped too), `aggregate` control totals, `profile`, `row_hash`, `hash_bucket` and `bisect` (checksum search that moves only differing rows), `full_diff` with mismatch classification and fix hints; partitions |
+| Execution | Parallel tables with per-connection caps, checkpoints and resume, retries, waivers, run history with baselines and trends |
+| Reports | Self-contained HTML, canonical JSON, JUnit XML, Markdown, Excel (`dvf[excel]`); extracts and repro files per failed check; result sinks (DuckDB, SQLite, PostgreSQL) |
 
-Exit codes: `0` passed, `1` validation failures (at or above `--fail-on`, or below `--min-score`), `2` execution errors, `3` configuration errors.
+Exit codes: `0` passed, `1` validation failures (at or above `--fail-on`, or below `--min-score`), `2` execution errors or an interrupted run, `3` configuration errors.
 
 ## Quickstart (from source)
 

@@ -9,11 +9,11 @@ Significant decisions are recorded as ADRs in [docs/adr](docs/adr/README.md). Th
 |---|---|---|
 | 0 | Foundations: config system, canonical types, result model, plugin registry, hooks, secrets, CLI skeleton, CI | **Done** |
 | 1 | Local MVP: DuckDB, SQLite, PostgreSQL, files; core checks and comparisons; JSON, HTML, JUnit, Markdown reports | **Done** |
-| 2 | Scale and debugging: bucketed hashing, bisection, parallel executor, explain/trace/debug, history, waivers at run time | Next |
-| 3 | Spark, lakehouse formats, NoSQL, SAP, migration validations, discovery and mapping import | Planned |
+| 2 | Scale and debugging: two-phase diffs, bucketed hashing, bisection, partitions, parallel executor, checkpoints and resume, explain/trace/debug/rerun, history, baselines, waivers, Excel, extracts, sinks, seven more connectors | **Done** |
+| 3 | Spark, lakehouse formats, NoSQL, SAP, migration validations, discovery and mapping import | Next |
 | 4 | Integrations, containers, docs site, 1.0 release | Planned |
 
-Phase 1 executes configurations end to end on the local machine. The execution model is recorded in [ADR 0007](docs/adr/0007-phase1-execution-model.md); the mismatch classifier moved forward from Phase 2 because Phase 1's acceptance requires it.
+Phase 1 executes configurations end to end; its execution model is in [ADR 0007](docs/adr/0007-phase1-execution-model.md). Phase 2 makes it scale and explain itself: two-phase diffs, checksum search, partitions, a parallel executor with per-connection caps, checkpoints, history, waivers, and debugging tools ([ADR 0008](docs/adr/0008-phase2-scale-and-debugging.md)).
 
 ## Design principles
 
@@ -52,16 +52,17 @@ flowchart LR
 | Plugins | `dvf.plugins` | 0 | Registry, entry-point discovery, local plugin loading, pluggy hooks, built-in declarations |
 | Security | `dvf.security` | 0 | Secret providers, secret references, redaction |
 | Observability | `dvf.observability` | 0 | Logging configuration, JSON logs, redaction filter |
-| Planning | `dvf.compare.plan`, `dvf.execution.selectors` | 1 | Column pairing (keys, mappings, renames, include and exclude), comparison plans, pattern expansion, `--only` selectors; discovery and partitioning arrive in Phases 2 and 3 |
-| Execution | `dvf.execution` | 1–2 | Sequential runner with error containment, run context, query recording, hooks (Phase 1); parallel executor, checkpoints, retries (Phase 2) |
-| Engines | `dvf.engines` | 1–3 | Row-level diff: `pushdown`, `duckdb`, `polars`, `auto` (Phase 1); Spark (Phase 3) |
-| Connectors | `dvf.connectors` | 1–3 | DuckDB, SQLite, PostgreSQL, files (Phase 1); warehouses (Phase 2); NoSQL and SAP (Phase 3) |
+| Planning | `dvf.compare.plan`, `dvf.compare.partitions`, `dvf.execution.selectors` | 1–2 | Column pairing (keys, mappings, renames, include and exclude), comparison plans, pattern expansion, `--only` selectors (Phase 1); partitions (Phase 2); discovery (Phase 3) |
+| Execution | `dvf.execution` | 1–2 | Runner with error containment, run context, query recording, hooks (Phase 1); parallel executor with per-connection leases, checkpoints and resume, retries, waivers, history, extracts and repro files (Phase 2) |
+| Engines | `dvf.engines` | 1–3 | Two-phase row-level diff: `pushdown`, `duckdb`, `polars`, `auto` (Phases 1–2); Spark (Phase 3) |
+| Connectors | `dvf.connectors` | 1–3 | DuckDB, SQLite, PostgreSQL, files (Phase 1); SQL Server, Oracle, MySQL, and the beta Snowflake, BigQuery, Redshift, Databricks connectors (Phase 2); NoSQL and SAP (Phase 3) |
+| SQL dialects | `dvf.sql` | 1–2 | Per-dialect primitives for canonical forms, hashing, and buckets; one module per dialect |
 | Normalization | `dvf.normalize` | 1 | Canonicalization (Python reference, SQL per dialect, Polars) and normalizers |
-| Comparison | `dvf.compare` | 1–2 | Row count, aggregate, profile, row hash, full diff, mismatch classifier (Phase 1); hash bucket, bisect, sample (Phase 2) |
+| Comparison | `dvf.compare` | 1–2 | Row count, aggregate, profile, row hash, full diff, mismatch classifier (Phase 1); checksum search for `hash_bucket` and `bisect` (Phase 2) |
 | Checks | `dvf.checks` | 1–3 | Schema checks SCH-01 to SCH-06 and data quality checks (Phase 1); migration checks (Phase 3) |
-| Reporting | `dvf.reporting` | 1–2 | JSON, HTML, JUnit, Markdown (Phase 1); Excel, extracts, sinks (Phase 2) |
-| Debugging | `dvf.debug` | 2 | Mismatch classifier, repro artifacts, row trace |
-| History | `dvf.history` | 2 | Run store, baselines, waivers |
+| Reporting | `dvf.reporting` | 1–2 | JSON, HTML, JUnit, Markdown (Phase 1); Excel, waivers, baselines, trends (Phase 2) |
+| Sinks | `dvf.sinks` | 2 | DuckDB, SQLite, and PostgreSQL result tables |
+| Debugging | `dvf.diagnose`, `dvf.debug` | 2 | `explain`, `trace`, loading earlier runs; `dvf.debug.load` is the notebook helper |
 
 ## Configuration pipeline
 
@@ -97,7 +98,7 @@ The registry stores entries of a given kind: `connector`, `check`, `comparator`,
 
 `RunResult` → `SuiteResult` → `DatasetPairResult` → `CheckResult`, defined in `dvf.models.results` and exported as JSON Schema in [schemas/results.schema.json](schemas/results.schema.json). The schema version is independent of the package version and follows SemVer. Every reporter in Phase 1 onward renders from this model.
 
-## Execution flow (Phase 1)
+## Execution flow
 
 ```mermaid
 flowchart TB
@@ -118,6 +119,9 @@ flowchart TB
 2. **Canonicalization.** Each paired column gets a canonical form chosen from both sides' types (`resolve_pair`), rendered as SQL in each side's dialect. The Python reference in `dvf.normalize.canonical` defines the rules; parity tests hold every implementation to it.
 3. **Comparisons** escalate: strategies run in order, and `on_mismatch` runs only when one fails. Counts, control totals, and profiles are pushed down to each database. Row-level strategies hand a projection of each side to the configured engine.
 4. **Error containment.** Each check runs in an error boundary; failures become `error` results with hints and redacted tracebacks, and the run continues. Results JSON is always written, and every other report renders from it.
+5. **Parallel tables.** A thread pool runs `max_parallel_tables` tables. Each task leases a slot of every connection it may use (sorted, so leases never deadlock) and gets its own sessions through `Connector.fork()`.
+6. **Two-phase diffs and checksum search.** Row diffs compare keys and row hashes first, then fetch full values for differing rows only. `hash_bucket` and `bisect` compare bucket checksums inside each database and drill into differing buckets before any row moves.
+7. **Checkpoints.** Finished tables and partitions are written atomically under `.dvf/runs/<run_id>/`; `--resume` continues a run from them. History, baselines, waivers, extracts, repro files, and sinks are applied as results are recorded or at the end of the run.
 
 ## Canonical type system
 
@@ -133,7 +137,7 @@ flowchart TB
 
 ```
 src/dvf/          package (see the layer table)
-tests/            unit/, parity/ (cross-engine canonicalization), e2e/ (seeded defects); benchmarks arrive with Phase 2
+tests/            unit/, parity/ (cross-engine canonicalization), e2e/ (seeded defects, resume), benchmarks/ (nox -s benchmark)
 examples/         runnable configuration examples
 schemas/          generated JSON Schemas for configuration and results
 docs/             MkDocs site and ADRs

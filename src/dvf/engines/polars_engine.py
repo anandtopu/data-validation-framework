@@ -114,10 +114,8 @@ class PolarsEngine(Engine):
                 exprs.append(canon.alias(f"c{j}"))
             exprs.append(raw_text.alias(f"r{j}"))
         projected = staged.select(exprs)
-        if job.mode == "hash":
-            hashed = [pl.col(f"c{j}") for j in sorted(canon_by_column)]
-            projected = projected.with_columns(polars_row_hash(hashed).alias("h"))
-        return projected
+        hashed = [pl.col(f"c{j}") for j in sorted(canon_by_column)]
+        return projected.with_columns(polars_row_hash(hashed).alias("h"))
 
     def diff(self, job: DiffJob) -> DiffResult:
         pl = _import_polars()
@@ -129,7 +127,8 @@ class PolarsEngine(Engine):
         s = self._project(source_frame, job, "source")
         t = self._project(target_frame, job, "target")
         keys = [f"k{i}" for i in range(len(plan.keys))]
-        order = [c for c in s.columns if c == "h" or c[0] in "cn"] or keys
+        # The same row per duplicated key as the SQL engines: smallest hash, then tolerance values.
+        order = [c for c in s.columns if c == "h" or c[0] == "n"]
 
         def prepare(frame: Any) -> tuple[Any, Any]:
             not_null = frame.filter(pl.all_horizontal([pl.col(k).is_not_null() for k in keys]))
@@ -167,9 +166,8 @@ class PolarsEngine(Engine):
                 )
             elif job.mode == "full":
                 flags[j] = pl.col(f"s_c{j}").ne_missing(pl.col(f"t_c{j}"))
-        row_parts = list(flags.values())
-        if job.mode == "hash":
-            row_parts.append(pl.col("s_h").ne_missing(pl.col("t_h")))
+        row_parts = [f for j, f in flags.items() if plan.columns[j].pair_spec.numeric is not None]
+        row_parts.append(pl.col("s_h").ne_missing(pl.col("t_h")))
         row_flag = pl.any_horizontal(row_parts) if row_parts else pl.lit(False)
         joined = joined.with_columns(
             in_s.alias("in_s"),

@@ -39,7 +39,8 @@ class NotBlank(RowCheck):
 
     def predicate(self, ctx: CheckContext) -> str:
         parts = [
-            f"({ctx.col(c)} IS NOT NULL AND {ctx.dialect.trim(ctx.text(ctx.col(c)))} <> '')"
+            f"({ctx.col(c)} IS NOT NULL AND "
+            f"{ctx.dialect.length(ctx.dialect.trim(ctx.text(ctx.col(c))))} > 0)"
             for c in self.config.target_columns()
         ]
         return " AND ".join(parts)
@@ -236,10 +237,13 @@ class ReferentialIntegrity(Check):
         orphan = (
             f"NOT EXISTS (SELECT 1 FROM (SELECT * FROM {parent_sql}) AS dvf_parent WHERE {join})"
         )
-        row = ctx.row(
-            f"SELECT COUNT(*) AS total_count, "
-            f"COALESCE(SUM(CASE WHEN {orphan} THEN 1 ELSE 0 END), 0) AS orphan_count\n"
+        flagged = (
+            f"SELECT CASE WHEN {orphan} THEN 1 ELSE 0 END AS dvf_orphan\n"
             f"FROM {child}\nWHERE {not_null}"
+        )
+        row = ctx.row(
+            f"SELECT COUNT(*) AS total_count, COALESCE(SUM(dvf_orphan), 0) AS orphan_count\n"
+            f"FROM ({flagged}) AS dvf_flags"
         )
         total, orphans = int(row["total_count"] or 0), int(row["orphan_count"] or 0)
         samples = None

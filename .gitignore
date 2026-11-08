@@ -26,6 +26,7 @@ site/
 
 # dvf runtime artifacts
 .dvf/
+.benchmarks/
 reports/
 *.local.yaml
 *.local.yml

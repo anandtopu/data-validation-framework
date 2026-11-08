@@ -28,7 +28,8 @@ All tasks run through [nox](https://nox.thea.codes/) so they behave the same on 
 | `uv run nox -s typecheck` | mypy in strict mode |
 | `uv run nox -s tests` | pytest with coverage on the current Python |
 | `uv run nox -s tests_all` | pytest on every supported Python that is installed |
-| `uv run nox -s integration` | PostgreSQL integration tests (uses `DVF_TEST_POSTGRES_URL`, or Docker through testcontainers) |
+| `uv run nox -s integration` | Integration tests against real databases (see below) |
+| `uv run nox -s benchmark` | 10-million-row benchmarks; fail on a missed target or a >15% slowdown (`-- --update` records a baseline) |
 | `uv run nox -s example` | Scaffold the seeded example and run it end to end |
 | `uv run nox -s schemas` | Regenerate `schemas/*.json` after changing config or result models |
 | `uv run nox -s docs` | Build the documentation site in strict mode |
@@ -41,7 +42,19 @@ All tasks run through [nox](https://nox.thea.codes/) so they behave the same on 
 - **Public API.** Only `dvf.api`, `dvf.plugins`, and `dvf.models` are public. Changes to them, to the configuration schema, or to the result schema need an ADR in `docs/adr/` and a CHANGELOG entry.
 - **Parity.** A normalizer or canonical form needs SQL (per dialect), Polars, and Python implementations, and a case in `tests/parity`. The Python reference defines the result.
 - **Acceptance.** `tests/e2e` injects known defects; a change must keep every count and classification exact.
-- **Integration tests** are marked `integration`. Without Docker, point them at any PostgreSQL 13+ server with `DVF_TEST_POSTGRES_URL=postgresql://user:password@host:port/db`; they skip when neither is available.
+- **Integration tests** are marked `integration` and skip when their database is unavailable. Point them at servers with environment variables:
+
+  | Variable | Example |
+  |---|---|
+  | `DVF_TEST_POSTGRES_URL` | `postgresql://user:password@localhost:5432/postgres` (or Docker through testcontainers) |
+  | `DVF_TEST_MYSQL_URL` | `mysql://root:password@localhost:3306/dvf` |
+  | `DVF_TEST_MSSQL_URL` | `mssql://sa:Password1@127.0.0.1:1433/master?TrustServerCertificate=yes` |
+  | `DVF_TEST_ORACLE_URL` | `oracle://dvf_test:password@localhost:1521/FREEPDB1` (create the user with the image's `APP_USER`; the name `dvf` clashes with an Oracle role) |
+  | `DVF_TEST_SNOWFLAKE`, `DVF_TEST_BIGQUERY`, `DVF_TEST_REDSHIFT`, `DVF_TEST_DATABRICKS` | a JSON object of connection settings |
+
+  Use throwaway local containers and test passwords only, for example `mysql:8.4`, `mcr.microsoft.com/mssql/server:2022-latest` (it requires accepting Microsoft's EULA with `ACCEPT_EULA=Y`), and `gvenzl/oracle-free:23-slim`, as in the CI integration job.
+- **Connector maturity.** Register a connector with `maturity="beta"` until its integration, parity, and seeded-defect tests have passed against a live system.
+- **Performance.** Changes to engines, canonical SQL, or the runner should keep `uv run nox -s benchmark` within 15% of the baseline.
 - **Schemas.** If you change configuration or result models, run `uv run nox -s schemas` and commit the regenerated files. A test fails if they are out of date.
 - **No secrets or real data.** Use synthetic data only. Never commit credentials, even in examples.
 - **Proprietary drivers.** Do not vendor or bundle them. Reference them as optional, user-installed dependencies.

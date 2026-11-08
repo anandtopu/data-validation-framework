@@ -302,7 +302,7 @@ def test_dialects_and_masking() -> None:
     with pytest.raises(UnsupportedFeatureError, match="only NFC"):
         duck.unicode_normalize("x", "NFKC")
     with pytest.raises(UnsupportedFeatureError, match="not available"):
-        get_dialect("oracle")
+        get_dialect("db2")
     assert get_dialect("sqlite").is_distinct("a", "b") == "(a IS NOT b)"
     privacy = Privacy(pii_columns=("ssn",))
     assert privacy.mask("ssn", "123") == "***"

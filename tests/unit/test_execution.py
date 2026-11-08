@@ -327,18 +327,16 @@ def test_no_keys_skips_row_level_and_auto_keys(tmp_path: Path) -> None:
 def test_missing_target_and_unknown_strategy(tmp_path: Path) -> None:
     load_duckdb({"s": pa.table({"id": [1]})}, tmp_path / "db.duckdb")
     result = _run(
-        _pair_config(
-            "s", "nope", keys=["id"], comparison={"strategies": ["row_count", "hash_bucket"]}
-        ),
+        _pair_config("s", "nope", keys=["id"], comparison={"strategies": ["row_count", "sample"]}),
         tmp_path,
     )
     checks = _by_suffix(result)
     assert checks["schema.object_exists"].status is Status.FAILED
     assert checks["schema.columns_present"].status is Status.SKIPPED
     result = _run(
-        _pair_config("s", "s", keys=["id"], comparison={"strategies": ["hash_bucket"]}), tmp_path
+        _pair_config("s", "s", keys=["id"], comparison={"strategies": ["sample"]}), tmp_path
     )
-    assert _by_suffix(result)["compare.hash_bucket"].status is Status.ERROR
+    assert _by_suffix(result)["compare.sample"].status is Status.ERROR
 
 
 def test_bad_connection_is_contained(tmp_path: Path) -> None:

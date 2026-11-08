@@ -60,6 +60,8 @@ def adhoc_config(spec: AdHocSpec) -> dict[str, Any]:
     return {
         "version": 1,
         "project": {"name": "adhoc-compare"},
+        # An ad hoc comparison leaves nothing behind but its reports.
+        "defaults": {"execution": {"checkpoints": False}},
         "connections": {"source": source_conn, "target": target_conn},
         "suites": [
             {

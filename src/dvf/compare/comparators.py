@@ -20,12 +20,15 @@ from decimal import Decimal
 from typing import Any
 
 from dvf.checks.context import CheckOutcome, pct
+from dvf.compare.buckets import search_and_diff
 from dvf.compare.classify import classify_pair, summarize
 from dvf.compare.context import ComparisonContext
+from dvf.compare.partitions import plan_partitions, restricted
 from dvf.compare.plan import PlannedColumn
 from dvf.core.enums import Dimension, Status
 from dvf.core.errors import PlanError
-from dvf.engines.base import DiffJob, DiffMode, DiffResult, Engine
+from dvf.engines.base import DiffJob, DiffMode, DiffResult, DiffSide, Engine, merge_results
+from dvf.execution.context import QueryRecorder
 from dvf.models.results import (
     ColumnMismatch,
     ColumnProfile,
@@ -515,7 +518,38 @@ def _engine(ctx: ComparisonContext) -> Engine:
     return engine
 
 
-def _run_diff(ctx: ComparisonContext, mode: DiffMode) -> tuple[DiffResult, DiffJob] | CheckOutcome:
+MAX_RECORDED_QUERIES = 60
+"""Queries kept on one result; partitioned and drill-down comparisons may run many more."""
+
+
+def _will_full_diff(ctx: ComparisonContext) -> bool:
+    comparison = ctx.table.comparison
+    return "full_diff" in comparison.strategies or comparison.on_mismatch == "full_diff"
+
+
+def _strategy_diff(
+    strategy: str, ctx: ComparisonContext, engine: Engine, job: DiffJob
+) -> DiffResult:
+    comparison = ctx.table.comparison
+    if strategy in ("hash_bucket", "bisect"):
+        return search_and_diff(
+            job.plan,
+            job.source,
+            job.target,
+            "hash" if strategy == "hash_bucket" else "key",
+            buckets=comparison.buckets,
+            fanout=comparison.drilldown_fanout,
+            threshold=comparison.drilldown_threshold,
+            engine=engine,
+            job_template=job,
+        )
+    return engine.diff(job)
+
+
+def _run_diff(
+    ctx: ComparisonContext, mode: DiffMode, strategy: str = "row_hash"
+) -> tuple[DiffResult, DiffJob] | CheckOutcome:
+    """Run (or reuse) the row-level diff of ``ctx`` for ``strategy``, partition by partition."""
     plan = ctx.plan
     if plan is None:
         error = ctx.plan_error
@@ -532,6 +566,76 @@ def _run_diff(ctx: ComparisonContext, mode: DiffMode) -> tuple[DiffResult, DiffJ
     )
     if cached is not None:
         return cached  # type: ignore[no-any-return]
+    engine = _engine(ctx)
+    partitions = plan_partitions(ctx, plan)
+    partitioned = ctx.table.comparison.partitions is not None
+    recorder = QueryRecorder()
+    parts: list[DiffResult] = []
+    part_details: list[dict[str, Any]] = []
+    for partition in partitions:
+        key = f"{strategy}.{mode}.{partition.name}"
+        saved = ctx.checkpoints.load(key) if (partitioned and ctx.checkpoints) else None
+        if saved is not None:
+            part = DiffResult.from_dict(saved)
+        else:
+            job = DiffJob(
+                plan=plan,
+                source=DiffSide(
+                    ctx.source.connector,
+                    restricted(ctx.source.relation, partition.source, plan.source_dialect),
+                ),
+                target=DiffSide(
+                    ctx.target.connector,
+                    restricted(ctx.target.relation, partition.target, plan.target_dialect),
+                ),
+                mode=mode,
+                sample_size=ctx.sample_size,
+                max_mismatch_rows=ctx.table.comparison.max_mismatch_rows,
+                recorder=recorder,
+                resources=ctx.resources,
+            )
+            part = _strategy_diff(strategy, ctx, engine, job)
+            if partitioned and ctx.checkpoints is not None:
+                ctx.checkpoints.save(key, part.to_dict())
+        parts.append(part)
+        if partitioned:
+            summary = part.summary
+            part_details.append(
+                {
+                    "name": partition.name,
+                    "status": "passed" if part.rows_with_differences == 0 else "failed",
+                    "source_rows": part.source_rows,
+                    "target_rows": part.target_rows,
+                    "matched": summary.matched,
+                    "mismatched": summary.mismatched,
+                    "missing_in_target": summary.missing_in_target,
+                    "extra_in_target": summary.extra_in_target,
+                    "from_checkpoint": saved is not None,
+                }
+            )
+    if partitioned:
+        result = merge_results(
+            parts,
+            parts[0].engine if parts else engine.name,
+            ctx.sample_size,
+            ctx.table.comparison.max_mismatch_rows,
+        )
+        result.details["partitions"] = part_details
+        column = ctx.table.comparison.partitions.column  # type: ignore[union-attr]
+        if column and result.summary.missing_in_target and result.summary.extra_in_target:
+            result.notes.append(
+                f"Rows whose '{column}' differs between source and target count as missing in one "
+                "partition and extra in another; partition by a column that does not change, such "
+                "as a key or a load date."
+            )
+        for name in ("rows_transferred", "summary_rows_transferred"):
+            values = [p.details[name] for p in parts if name in p.details]
+            if values:
+                result.details[name] = sum(values)
+        if parts and "strategy" in parts[0].details:
+            result.details["strategy"] = parts[0].details["strategy"]
+    else:
+        result = parts[0]
     job = DiffJob(
         plan=plan,
         source=ctx.source,
@@ -539,8 +643,14 @@ def _run_diff(ctx: ComparisonContext, mode: DiffMode) -> tuple[DiffResult, DiffJ
         mode=mode,
         sample_size=ctx.sample_size,
         max_mismatch_rows=ctx.table.comparison.max_mismatch_rows,
+        recorder=recorder,
+        resources=ctx.resources,
     )
-    result = _engine(ctx).diff(job)
+    if len(recorder.records) > MAX_RECORDED_QUERIES:
+        result.notes.append(
+            f"{len(recorder.records):,} queries ran; the first {MAX_RECORDED_QUERIES} are recorded."
+        )
+        recorder.records = recorder.records[:MAX_RECORDED_QUERIES]
     ctx.state[f"diff:{mode}"] = (result, job)
     ctx.dataset.reconciliation = result.summary
     if ctx.dataset.row_counts.source is None:
@@ -577,7 +687,7 @@ def _key_outcome(ctx: ComparisonContext, result: DiffResult, job: DiffJob) -> Ch
         if found
         else f"all {s.matched + s.mismatched:,} keys match one to one"
     )
-    hints = []
+    hints = [n for n in result.notes if "partition" in n]
     if s.duplicate_keys_source or s.duplicate_keys_target:
         hints.append("Duplicate keys are compared using one row per key; check the key definition.")
     return _outcome(
@@ -598,6 +708,11 @@ def _key_outcome(ctx: ComparisonContext, result: DiffResult, job: DiffJob) -> Ch
             "source_rows": result.source_rows,
             "target_rows": result.target_rows,
             "match_pct": s.match_pct,
+            **(
+                {"partitions": result.details["partitions"]}
+                if "partitions" in result.details
+                else {}
+            ),
         },
     )
 
@@ -606,7 +721,10 @@ class RowHashComparator(Comparator):
     """Pair rows by key and compare a hash of their canonical columns."""
 
     def compare(self, ctx: ComparisonContext) -> list[CheckOutcome]:
-        outcome = _run_diff(ctx, "hash")
+        # When full_diff will run anyway, diff in full mode now: phase B only runs if rows differ,
+        # and full_diff then reuses this result instead of comparing every row again.
+        mode: DiffMode = "full" if _will_full_diff(ctx) else "hash"
+        outcome = _run_diff(ctx, mode)
         if isinstance(outcome, CheckOutcome):
             return [outcome]
         result, job = outcome
@@ -633,8 +751,9 @@ class RowHashComparator(Comparator):
                 normalization=job.plan.describe(),
                 timing=result.timing,
                 hints=["Add 'full_diff' (or on_mismatch: full_diff) to see which columns differ."]
-                if s.mismatched
+                if s.mismatched and not _will_full_diff(ctx)
                 else [],
+                details=dict(result.details),
             )
         )
         return outcomes
@@ -742,10 +861,114 @@ class FullDiffComparator(Comparator):
                 engine=result.engine,
                 normalization=job.plan.describe(),
                 timing=result.timing,
-                details={"values_compared": total_values, "values_differing": differing_values},
+                details={
+                    "values_compared": total_values,
+                    "values_differing": differing_values,
+                    **{
+                        k: v
+                        for k, v in result.details.items()
+                        if k in ("partitions", "rows_transferred")
+                    },
+                },
+                extract=_mismatch_extract(ctx, job, result),
             )
         )
         return outcomes
+
+
+def _mismatch_extract(ctx: ComparisonContext, job: DiffJob, result: DiffResult) -> Any:
+    """Every fetched mismatched value (up to max_mismatch_rows), masked, for an extract file."""
+    if not result.mismatches or ctx.privacy.strict:
+        return None
+    from dvf.execution.artifacts import text_table
+
+    key_labels = [k.label for k in job.plan.keys]
+    pii = {c.label for c in job.plan.columns if c.pii}
+    rows = []
+    for r in result.mismatches:
+        hidden = r.column in pii and ctx.privacy.mask_pii
+        rows.append(
+            [
+                *[ctx.privacy.mask(k, v) for k, v in zip(key_labels, r.keys, strict=True)],
+                r.column,
+                "***" if hidden else ctx.privacy.mask(r.column, r.source_value),
+                "***" if hidden else ctx.privacy.mask(r.column, r.target_value),
+                classify_pair(r.source_value, r.target_value),
+            ]
+        )
+    return text_table(
+        [*key_labels, "column", "source_value", "target_value", "classification"], rows
+    )
+
+
+class _ChecksumComparator(Comparator):
+    strategy = "hash_bucket"
+
+    def compare(self, ctx: ComparisonContext) -> list[CheckOutcome]:
+        mode: DiffMode = "full" if _will_full_diff(ctx) else "hash"
+        outcome = _run_diff(ctx, mode, self.strategy)
+        if isinstance(outcome, CheckOutcome):
+            return [outcome]
+        result, job = outcome
+        outcomes = []
+        if not ctx.state.get("keys_reported"):
+            outcomes.append(_key_outcome(ctx, result, job))
+            ctx.state["keys_reported"] = True
+        s = result.summary
+        compared = s.matched + s.mismatched
+        details = dict(result.details)
+        levels = details.get("levels") or []
+        first = levels[0] if levels else {}
+        transferred = details.get("rows_transferred")
+        moved_pct = details.get("transfer_pct")
+        unit = "buckets" if self.strategy == "hash_bucket" else "key segments"
+        parts = [
+            f"{s.mismatched:,} of {compared:,} paired rows differ"
+            if s.mismatched
+            else f"all {compared:,} paired rows are identical"
+        ]
+        if first:
+            parts.append(
+                f"{first.get('buckets_differing', 0):,} of {first.get('buckets_compared', 0):,} "
+                f"{unit} differed at the first level, {len(levels)} level(s) searched"
+            )
+        if transferred is not None:
+            parts.append(
+                f"{transferred:,} rows transferred"
+                + (f" ({moved_pct:.4g}% of rows)" if moved_pct is not None else "")
+            )
+        hints = list(result.notes)
+        if s.mismatched and not _will_full_diff(ctx):
+            hints.append("Add on_mismatch: full_diff to see which columns differ.")
+        outcomes.append(
+            _outcome(
+                self.strategy,
+                passed=s.mismatched == 0,
+                message="; ".join(parts),
+                observed=s.mismatched,
+                expected=0,
+                unexpected_count=s.mismatched,
+                total_count=compared,
+                engine=result.engine,
+                normalization=job.plan.describe(),
+                timing=result.timing,
+                hints=hints,
+                details=details,
+            )
+        )
+        return outcomes
+
+
+class HashBucketComparator(_ChecksumComparator):
+    """Compare bucketed checksums in each database, then drill into mismatched buckets."""
+
+    strategy = "hash_bucket"
+
+
+class BisectComparator(_ChecksumComparator):
+    """Recursive key-range checksums for mostly identical large tables (integer keys)."""
+
+    strategy = "bisect"
 
 
 BUILTIN_COMPARATORS: dict[str, type[Comparator]] = {
@@ -753,5 +976,7 @@ BUILTIN_COMPARATORS: dict[str, type[Comparator]] = {
     "aggregate": AggregateComparator,
     "profile": ProfileComparator,
     "row_hash": RowHashComparator,
+    "hash_bucket": HashBucketComparator,
+    "bisect": BisectComparator,
     "full_diff": FullDiffComparator,
 }

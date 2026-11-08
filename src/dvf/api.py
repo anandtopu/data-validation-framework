@@ -23,6 +23,13 @@ from dvf.config.models import DvfConfig
 from dvf.config.schema import config_json_schema, results_json_schema
 from dvf.core.enums import Severity
 from dvf.core.errors import ConfigError
+from dvf.diagnose.explain import ExplainReport
+from dvf.diagnose.explain import explain as _explain
+from dvf.diagnose.runs import CheckHandle, RunHandle
+from dvf.diagnose.runs import load_run as _load_run
+from dvf.diagnose.trace import TraceReport
+from dvf.diagnose.trace import trace as _trace
+from dvf.execution.history import HistoryStore
 from dvf.execution.runner import Runner, RunOptions, RunOutput, exit_code_for
 from dvf.execution.selectors import Selectors
 from dvf.models.results import ArtifactRef, RunResult
@@ -32,23 +39,32 @@ from dvf.reporting.base import render_reports as _render_reports
 
 __all__ = [
     "AdHocSpec",
+    "CheckHandle",
     "ConfigError",
     "DvfConfig",
+    "ExplainReport",
     "LoadOptions",
     "LoadedConfig",
     "ReportOptions",
+    "RunHandle",
     "RunOutput",
     "RunResult",
+    "TraceReport",
     "ValidationReport",
     "compare",
     "config_json_schema",
     "exit_code",
+    "explain",
     "get_registry",
     "load_config",
     "load_config_data",
+    "load_run",
     "render_reports",
     "results_json_schema",
     "run",
+    "run_history",
+    "state_dir",
+    "trace",
     "validate_config",
 ]
 
@@ -190,8 +206,19 @@ def run(
     write_reports: bool = True,
     plugins: Sequence[str] = (),
     registry: Registry | None = None,
+    resume: str | None = None,
+    force_resume: bool = False,
+    failed_from: str | None = None,
+    parallel: int | None = None,
+    keep_temp: bool = False,
+    history: bool = True,
+    baseline: str | None = None,
 ) -> RunOutput:
     """Run a configuration and return the results and the report files written.
+
+    ``resume`` continues an interrupted or killed run from its checkpoints; ``failed_from`` runs
+    only the checks that failed or errored in that earlier run. ``parallel`` overrides
+    ``defaults.execution.max_parallel_tables``; ``baseline`` overrides ``history.baseline``.
 
     ``config`` is a file path, a :class:`LoadedConfig`, or a :class:`DvfConfig` built in code
     (relative paths are then resolved against the current directory). ``only`` takes selectors
@@ -217,14 +244,84 @@ def run(
             plugins=plugins,
             registry=registry,
         )
+    selectors = Selectors.parse(list(only))
+    if failed_from is not None:
+        handle = load_run(failed_from, config=loaded)
+        rerun = handle.rerun_selectors()
+        selectors = Selectors.parse([*selectors.raw, *rerun.raw])
     options = RunOptions(
-        selectors=Selectors.parse(list(only)),
+        selectors=selectors,
         run_id=run_id,
         output_dir=Path(output_dir) if output_dir is not None else None,
         formats=list(formats) if formats is not None else None,
         write_reports=write_reports,
+        resume=resume,
+        force_resume=force_resume,
+        parallel=parallel,
+        keep_temp=keep_temp,
+        history=history,
+        baseline=baseline,
     )
     return Runner(loaded, options).run()
+
+
+def state_dir(loaded: LoadedConfig) -> Path:
+    """The folder holding a configuration's checkpoints, run results, and history."""
+    path = Path(loaded.config.defaults.execution.state_dir)
+    return path if path.is_absolute() else loaded.base_dir / path
+
+
+def load_run(
+    run: str | os.PathLike[str],
+    *,
+    config: str | os.PathLike[str] | LoadedConfig | None = None,
+    state: str | os.PathLike[str] | None = None,
+) -> RunHandle:
+    """Load an earlier run by run ID (from the configuration's state folder, ``.dvf`` by
+    default) or by ``results.json`` path. ``handle.check(check_id).mismatches()`` returns the
+    mismatched values as an Arrow table (or ``format="pandas"`` / ``"polars"``)."""
+    folder: Path | None = Path(state) if state is not None else None
+    if folder is None and config is not None:
+        loaded = config if isinstance(config, LoadedConfig) else load_config(config, strict=False)
+        folder = state_dir(loaded)
+    return _load_run(Path(run) if str(run).endswith(".json") else str(run), state_dir=folder)
+
+
+def explain(
+    config: str | os.PathLike[str] | LoadedConfig,
+    *,
+    table: str | None = None,
+    suite: str | None = None,
+    only: Sequence[str] = (),
+) -> ExplainReport:
+    """The plan of a run and the SQL each step would execute, without running validations
+    (only catalog lookups touch the connections)."""
+    loaded = config if isinstance(config, LoadedConfig) else load_config(config)
+    runner = Runner(loaded, RunOptions(selectors=Selectors.parse(list(only)), write_reports=False))
+    return _explain(runner, table=table, suite=suite)
+
+
+def trace(
+    config: str | os.PathLike[str] | LoadedConfig,
+    *,
+    table: str,
+    keys: Sequence[str],
+    suite: str | None = None,
+) -> TraceReport:
+    """Follow the record with ``keys`` through both sides: raw value, each normalizer, canonical
+    value, and row hash."""
+    loaded = config if isinstance(config, LoadedConfig) else load_config(config)
+    runner = Runner(loaded, RunOptions(write_reports=False))
+    return _trace(runner, table=table, keys=list(keys), suite=suite)
+
+
+def run_history(
+    config: str | os.PathLike[str] | LoadedConfig, *, limit: int = 20
+) -> list[dict[str, Any]]:
+    """Recent runs of the configuration's project, newest first."""
+    loaded = config if isinstance(config, LoadedConfig) else load_config(config, strict=False)
+    store = HistoryStore(loaded.config.history.store, loaded.base_dir)
+    return store.runs(loaded.config.project.name, limit)
 
 
 def compare(

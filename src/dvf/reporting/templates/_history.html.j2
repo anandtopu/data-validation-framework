@@ -1,0 +1,92 @@
+{#- Run history: baseline comparison, quality trend, and waivers. Each section renders only when the
+    result holds its data. -#}
+{% import "_macros.html.j2" as m %}
+{% if baseline_view %}
+{% set b = baseline %}
+<section id="baseline" class="card">
+  <h2>Baseline comparison</h2>
+  <p class="baseline-line">{{ baseline_view.text }}
+    <span class="muted">· policy {{ b.policy }}{% if b.baseline_started_at %} · baseline started {{ b.baseline_started_at|dt }}{% endif %}</span></p>
+  <div class="blocks">
+    {% for title, css, items in [("New failures", "new", baseline_view.new_failures), ("Resolved", "resolved", baseline_view.resolved), ("Persisting failures", "persisting", baseline_view.persisting)] %}
+    <div class="block baseline-{{ css }}">
+      <h4>{{ title }} <span class="muted">({{ items.total|count }})</span></h4>
+      {% if items.links %}
+      <ul class="ids">
+        {% for link in items.links %}
+        <li>{{ m.check_link(link) }}</li>
+        {% endfor %}
+        {% if items.more %}<li class="muted">… {{ items.more|count }} more</li>{% endif %}
+      </ul>
+      {% else %}
+      <p class="muted">None.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if trend %}
+<section id="trend" class="card">
+  <h2>Trend <span class="muted">(last {{ trend|length }} runs, including this one)</span></h2>
+  {% if sparkline %}
+  {% set s = sparkline %}
+  <svg class="sparkline" viewBox="0 0 {{ s.width }} {{ s.height }}" width="{{ s.width }}" height="{{ s.height }}" role="img" aria-labelledby="trend-title">
+    <title id="trend-title">Quality score per run, from 0% to 100%</title>
+    <line class="guide" x1="0" y1="{{ s.top }}" x2="{{ s.width }}" y2="{{ s.top }}"></line>
+    <line class="guide" x1="0" y1="{{ s.bottom }}" x2="{{ s.width }}" y2="{{ s.bottom }}"></line>
+    <polyline class="spark-line" points="{{ s.polyline }}"></polyline>
+    {% for p in s.points %}
+    <circle class="spark-dot{% if p.current %} current{% endif %}" cx="{{ p.x }}" cy="{{ p.y }}" r="{{ 4 if p.current else 3 }}"><title>{{ p.label }}</title></circle>
+    {% endfor %}
+  </svg>
+  {% endif %}
+  <div class="table-wrap"><table class="data trend">
+    <thead><tr><th>Run</th><th>Started</th><th>Status</th><th class="num">Quality score</th><th class="num">Checks</th><th class="num">Failed</th><th class="num">Errors</th></tr></thead>
+    <tbody>
+    {% for point, current in trend|reverse %}
+    <tr{% if current %} class="current"{% endif %}>
+      <td class="mono">{{ point.run_id }}{% if current %} <span class="tag">this run</span>{% endif %}</td>
+      <td>{{ point.started_at|dt }}</td>
+      <td>{{ m.badge(point.status) }}</td>
+      <td class="num">{{ point.quality_score|pct }}</td>
+      <td class="num">{{ point.checks|count }}</td>
+      <td class="num">{{ point.failed|count }}</td>
+      <td class="num">{{ point.errors|count }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endif %}
+
+{% if waivers %}
+<section id="waivers" class="card">
+  <h2>Waivers <span class="muted">({% for status, n in waiver_counts.items() %}{{ n }} {{ status }}{% if not loop.last %}, {% endif %}{% endfor %})</span></h2>
+  {% if waiver_counts.get('expired') %}
+  <div class="banner banner-failed" role="status"><strong>{{ waiver_counts['expired'] }} expired waiver{{ '' if waiver_counts['expired'] == 1 else 's' }}.</strong> Failures they covered count again until the waivers are renewed or removed.</div>
+  {% endif %}
+  <div class="table-wrap"><table class="data waivers">
+    <thead><tr><th>Status</th><th>Selector</th><th>Column</th><th>Reason</th><th>Ticket</th><th>Approved by</th><th>Expires</th><th>Checks</th></tr></thead>
+    <tbody>
+    {% for wv in waivers %}
+    {% set w = wv.waiver %}
+    <tr class="w-{{ w.status }}{% if w.status == 'expired' %} hl-fail{% endif %}">
+      <td><span class="badge b-{{ wv.badge }}">{{ w.status }}</span></td>
+      <td><code>{{ w.selector }}</code></td>
+      <td>{% if w.column %}<code>{{ w.column }}</code>{% else %}{{ none|fmt }}{% endif %}</td>
+      <td>{{ w.reason|fmt(1000) }}</td>
+      <td>{{ w.ticket|fmt }}</td>
+      <td>{{ w.approved_by|fmt }}</td>
+      <td>{{ w.expires|fmt }}</td>
+      <td>
+        {% for link in wv.checks.links %}<div>{{ m.check_link(link) }}</div>{% else %}<span class="muted">none</span>{% endfor %}
+        {% if wv.checks.more %}<div class="muted">… {{ wv.checks.more|count }} more</div>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endif %}

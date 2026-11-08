@@ -16,6 +16,7 @@ from pydantic import (
     NonNegativeFloat,
     NonNegativeInt,
     PositiveInt,
+    SecretStr,
     SerializeAsAny,
     field_validator,
     model_validator,
@@ -90,13 +91,30 @@ class PrivacyConfig(StrictModel):
 
 
 class ExecutionConfig(StrictModel):
-    """Concurrency, timeouts, and retries."""
+    """Concurrency, timeouts, retries, local engine resources, and checkpoints."""
 
     max_parallel_tables: PositiveInt = 4
+    """Tables validated at the same time (project-level setting)."""
     max_queries_per_connection: PositiveInt = 2
+    """Default cap on tables using one connection at the same time; a connection's own
+    ``max_parallel_queries`` overrides it."""
     query_timeout_s: PositiveInt = 1800
     retries: NonNegativeInt = 2
+    """Retries of a query that failed with a transient error (lost connection, deadlock, timeout)."""
     retry_backoff_s: NonNegativeFloat = 2.0
+    """First retry delay in seconds; it doubles on each retry."""
+    memory_limit: str | None = Field(
+        default=None, pattern=r"^\d+(\.\d+)?\s*(B|KB|MB|GB|TB|KiB|MiB|GiB|TiB)$"
+    )
+    """Memory limit of the local DuckDB engine, such as ``4GB``. It spills to disk beyond it."""
+    threads: PositiveInt | None = None
+    """Threads of the local DuckDB engine (default: all cores)."""
+    temp_dir: str | None = None
+    """Folder for the local engine's spill files (default: the system temporary folder)."""
+    checkpoints: bool = True
+    """Save finished tables and partitions so ``dvf run --resume RUN_ID`` can continue a run."""
+    state_dir: str = ".dvf"
+    """Folder (relative to the configuration) for checkpoints, run results, and history."""
 
 
 class ToleranceConfig(StrictModel):
@@ -123,6 +141,43 @@ class SampleConfig(StrictModel):
         return self
 
 
+class PartitionPredicate(StrictModel):
+    """A named partition given as a SQL predicate per side."""
+
+    name: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.=-]+$")
+    source: str = Field(min_length=1)
+    target: str | None = None
+    """Predicate on the target; defaults to the source predicate."""
+
+
+class PartitionConfig(StrictModel):
+    """Split row-level comparisons into independent partitions.
+
+    Each partition is compared on its own (and checkpointed), and the partition results are
+    combined. Use exactly one of ``values``, ``ranges``, ``hash_buckets``, or ``predicates``.
+    """
+
+    column: str | None = None
+    """Paired column (target or source name) for ``values`` and ``ranges``."""
+    values: Literal["auto"] | list[Any] | None = None
+    """One partition per value; ``auto`` reads the distinct values from the source. Rows with
+    other values or NULL form one more partition."""
+    ranges: list[Any] | None = Field(default=None, min_length=1)
+    """Ascending boundaries; partitions are below the first, between neighbors, from the last
+    upward, and NULL."""
+    hash_buckets: PositiveInt | None = Field(default=None, le=4096)
+    """Split by a hash of the key columns into this many partitions."""
+    predicates: list[PartitionPredicate] | None = Field(default=None, min_length=1)
+    max_partitions: PositiveInt = Field(default=1000, le=100_000)
+
+    @model_validator(mode="after")
+    def _one_kind(self) -> PartitionConfig:
+        ExactlyOneOf.check(self, ("values", "ranges", "hash_buckets", "predicates"))
+        if (self.values is not None or self.ranges is not None) and not self.column:
+            raise ValueError("'values' and 'ranges' partitions need 'column'")
+        return self
+
+
 Aggregate = Literal[
     "count", "sum", "min", "max", "avg", "count_distinct", "null_count", "sum_length"
 ]
@@ -142,7 +197,14 @@ class ComparisonConfig(StrictModel):
     on_mismatch: ComponentName | None = "full_diff"
     """Strategy used to explain mismatches found by the strategies above (or none)."""
     buckets: PositiveInt = Field(default=256, le=1_000_000)
-    """Number of hash buckets for ``hash_bucket``."""
+    """Number of first-level hash buckets for ``hash_bucket``."""
+    drilldown_fanout: int = Field(default=16, ge=2, le=1024)
+    """Sub-buckets (``hash_bucket``) or key segments (``bisect``) per mismatched bucket or segment."""
+    drilldown_threshold: PositiveInt = 10_000
+    """Stop drilling down once the mismatched buckets or segments hold at most this many rows,
+    and fetch their row hashes."""
+    partitions: PartitionConfig | None = None
+    """Compare row-level strategies partition by partition."""
     group_by: list[str] = Field(default_factory=list)
     """Columns for grouped counts and control totals (for example company code, period)."""
     aggregates: list[Aggregate] = Field(default_factory=lambda: list(_DEFAULT_AGGREGATES))
@@ -441,6 +503,21 @@ class HistoryConfig(StrictModel):
     retention_runs: PositiveInt | None = None
 
 
+class SinkConfig(StrictModel):
+    """Where run and check results are written as tables, for dashboards."""
+
+    type: ComponentName
+    """Sink type, for example ``duckdb``, ``sqlite``, or ``postgres``."""
+    enabled: bool = True
+    path: str | None = None
+    """Database file for file-based sinks (relative to the configuration)."""
+    url: SecretStr | None = None
+    """Connection URL for server sinks. Treated as a secret."""
+    schema_: str | None = Field(default=None, alias="schema")
+    table_prefix: str = Field(default="dvf_", pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    options: dict[str, Any] = Field(default_factory=dict)
+
+
 class PluginsConfig(StrictModel):
     """Project-local plugins. Loading them executes their code."""
 
@@ -464,6 +541,8 @@ class DvfConfig(StrictModel):
     waivers: list[WaiverConfig] = Field(default_factory=list)
     reports: ReportsConfig = Field(default_factory=ReportsConfig)
     history: HistoryConfig = Field(default_factory=HistoryConfig)
+    sinks: list[SinkConfig] = Field(default_factory=list)
+    """Result sinks that receive every run's results as tables."""
     notifications: list[SerializeAsAny[NotificationConfig]] = Field(default_factory=list)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     extends: list[str] = Field(default_factory=list, exclude=True)

@@ -318,7 +318,10 @@ def simple_upper(text: str) -> str:
         if up is None:
             up = ch.upper()
             if len(up) != 1:
-                up = ch
+                # Python's full mapping expands (U+1F80 to two letters); the simple mapping that
+                # databases use equals the title-case form when that is one character.
+                title = ch.title()
+                up = title if len(title) == 1 else ch
         out.append(up)
     return "".join(out)
 
@@ -528,7 +531,7 @@ def canonical_sql(expr: str, spec: CanonSpec, dialect: Dialect) -> str:
     if kind is Kind.TEXT:
         out = expr if spec.logical is LogicalType.STRING else dialect.to_text(expr)
         opts = spec.strings
-        if opts.unicode_form != "none":
+        if opts.unicode_form != "none" and dialect.supports_unicode_form(opts.unicode_form):
             out = dialect.unicode_normalize(out, opts.unicode_form)
         if opts.trim != "none":
             out = dialect.trim(out, opts.trim)
@@ -537,7 +540,7 @@ def canonical_sql(expr: str, spec: CanonSpec, dialect: Dialect) -> str:
         if not opts.case_sensitive:
             out = dialect.lower(out)
         if opts.null_equals_empty:
-            out = f"NULLIF({out}, '')"
+            out = f"(CASE WHEN {dialect.length(out)} = 0 THEN NULL ELSE {out} END)"
         return out
     if kind is Kind.INTEGER:
         return dialect.integer_text(expr)

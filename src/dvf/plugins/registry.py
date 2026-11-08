@@ -79,6 +79,8 @@ class PluginEntry:
     version: str | None = None
     extra: str | None = None
     """The pip extra expected to provide the implementation, for declared built-ins."""
+    maturity: str = "stable"
+    """``stable``, or ``beta`` for an implementation not yet verified against a live system."""
 
     @property
     def ready(self) -> bool:
@@ -86,7 +88,11 @@ class PluginEntry:
 
     @property
     def status(self) -> str:
-        return "ready" if self.ready else "declared"
+        """``declared`` (no implementation), ``beta`` (implemented, not verified against a live
+        system), or ``ready``."""
+        if not self.ready:
+            return "declared"
+        return "beta" if self.maturity == "beta" else "ready"
 
     @property
     def source(self) -> str:
@@ -129,6 +135,7 @@ class Registry:
         version: str | None = None,
         extra: str | None = None,
         replace_existing: bool = False,
+        maturity: str = "stable",
     ) -> PluginEntry:
         """Register a component and return its entry.
 
@@ -164,6 +171,7 @@ class Registry:
             distribution=distribution,
             version=version,
             extra=extra,
+            maturity=maturity,
         )
         existing = self._entries[kind].get(name)
         if existing is not None:
