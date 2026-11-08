@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -238,3 +240,214 @@ def compare_to_baseline(
         resolved=sorted(k for k in failing_before - failing_now if k in current),
         persisting=sorted(failing_now & failing_before),
     )
+
+
+# ---------------------------------------------------------------------- named baselines (MIG-14)
+
+BASELINES_DIR = "baselines"
+"""Folder under the state folder holding named metric baselines (``<name>.json``)."""
+
+_BASELINE_NAME = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+def baseline_path(state_dir: Path, name: str) -> Path:
+    """Where the named baseline ``name`` is stored."""
+    if not _BASELINE_NAME.match(name):
+        raise ConfigError(
+            f"Invalid baseline name '{name}'.",
+            hint="Use letters, digits, underscores, and hyphens, for example pre_cutover.",
+        )
+    return state_dir / BASELINES_DIR / f"{name}.json"
+
+
+def save_named_baseline(
+    state_dir: Path, name: str, document: dict[str, Any], *, overwrite: bool = False
+) -> Path:
+    """Store a named baseline document atomically; refuse to replace one unless ``overwrite``."""
+    from dvf.execution.checkpoint import write_atomic
+
+    path = baseline_path(state_dir, name)
+    if path.exists() and not overwrite:
+        raise ConfigError(
+            f"Baseline '{name}' already exists ({path}).",
+            hint="Choose another name, or pass --overwrite to replace it.",
+        )
+    write_atomic(path, json.dumps(document, indent=2, default=str))
+    return path
+
+
+def load_named_baseline(state_dir: Path, name: str) -> dict[str, Any]:
+    """Read the named baseline ``name``."""
+    path = baseline_path(state_dir, name)
+    if not path.exists():
+        available = [b["name"] for b in list_named_baselines(state_dir)]
+        hint = (
+            f"Available baselines: {', '.join(available)}."
+            if available
+            else "Capture one with 'dvf baseline capture CONFIG --name NAME'."
+        )
+        raise ConfigError(f"Baseline '{name}' not found in {path.parent}.", hint=hint)
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ConfigError(f"Baseline file {path} is not a baseline document.")
+    return document
+
+
+def list_named_baselines(state_dir: Path) -> list[dict[str, Any]]:
+    """Name, capture time, side, and table count of every named baseline, newest first."""
+    folder = state_dir / BASELINES_DIR
+    if not folder.is_dir():
+        return []
+    entries: list[dict[str, Any]] = []
+    for path in folder.glob("*.json"):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(document, dict):
+            continue
+        entries.append(
+            {
+                "name": path.stem,
+                "captured_at": document.get("captured_at"),
+                "side": document.get("side"),
+                "tables": len(document.get("tables", {})),
+                "path": str(path),
+            }
+        )
+    return sorted(entries, key=lambda e: str(e["captured_at"] or ""), reverse=True)
+
+
+# ---------------------------------------------------------------------- comparing two runs (MIG-08)
+
+
+@dataclass
+class RunDiff:
+    """How a later run (``b``) differs from an earlier one (``a``), for mock cutover rehearsals."""
+
+    run_a: str
+    run_b: str
+    status_a: str
+    status_b: str
+    started_a: str | None = None
+    started_b: str | None = None
+    new_failures: list[str] = field(default_factory=list)
+    """Checks failing (or in error) in ``b`` but not in ``a``."""
+    resolved: list[str] = field(default_factory=list)
+    """Checks failing in ``a`` that ran in ``b`` and no longer fail."""
+    persisting: list[str] = field(default_factory=list)
+    added_checks: list[str] = field(default_factory=list)
+    removed_checks: list[str] = field(default_factory=list)
+    status_changes: list[dict[str, Any]] = field(default_factory=list)
+    """Every check whose status changed: ``check_id``, ``before``, ``after``."""
+    summary_deltas: list[dict[str, Any]] = field(default_factory=list)
+    """Run metrics (quality score, checks per status, rows compared, duration) before and after."""
+    dataset_deltas: list[dict[str, Any]] = field(default_factory=list)
+    """Per table: status, row counts, and key reconciliation totals that changed."""
+    check_deltas: list[dict[str, Any]] = field(default_factory=list)
+    """Checks whose unexpected count changed."""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "run_a": self.run_a,
+            "run_b": self.run_b,
+            "status_a": self.status_a,
+            "status_b": self.status_b,
+            "started_a": self.started_a,
+            "started_b": self.started_b,
+            "new_failures": list(self.new_failures),
+            "resolved": list(self.resolved),
+            "persisting": list(self.persisting),
+            "added_checks": list(self.added_checks),
+            "removed_checks": list(self.removed_checks),
+            "status_changes": list(self.status_changes),
+            "summary_deltas": list(self.summary_deltas),
+            "dataset_deltas": list(self.dataset_deltas),
+            "check_deltas": list(self.check_deltas),
+        }
+
+
+def _delta(name: str, before: Any, after: Any, **extra: Any) -> dict[str, Any]:
+    change = None
+    numeric = (int, float)
+    if (
+        isinstance(before, numeric)
+        and isinstance(after, numeric)
+        and not isinstance(before, bool)
+        and not isinstance(after, bool)
+    ):
+        change = round(after - before, 6)
+    return {**extra, "metric": name, "before": before, "after": after, "change": change}
+
+
+def compare_runs(a: RunResult, b: RunResult) -> RunDiff:
+    """New, resolved, and persisting failures and metric deltas from run ``a`` to run ``b``."""
+    checks_a = {c.check_id: c for c in a.iter_checks()}
+    checks_b = {c.check_id: c for c in b.iter_checks()}
+    failing_a = {k for k, c in checks_a.items() if c.status.value in _FAILING}
+    failing_b = {k for k, c in checks_b.items() if c.status.value in _FAILING}
+    diff = RunDiff(
+        run_a=a.run_id,
+        run_b=b.run_id,
+        status_a=a.status.value,
+        status_b=b.status.value,
+        started_a=a.started_at.isoformat(),
+        started_b=b.started_at.isoformat(),
+        new_failures=sorted(failing_b - failing_a),
+        resolved=sorted(k for k in failing_a - failing_b if k in checks_b),
+        persisting=sorted(failing_a & failing_b),
+        added_checks=sorted(set(checks_b) - set(checks_a)),
+        removed_checks=sorted(set(checks_a) - set(checks_b)),
+    )
+    for check_id in sorted(set(checks_a) & set(checks_b)):
+        before, after = checks_a[check_id], checks_b[check_id]
+        if before.status != after.status:
+            diff.status_changes.append(
+                {"check_id": check_id, "before": before.status.value, "after": after.status.value}
+            )
+        if before.unexpected_count != after.unexpected_count:
+            diff.check_deltas.append(
+                _delta(
+                    "unexpected_count",
+                    before.unexpected_count,
+                    after.unexpected_count,
+                    check_id=check_id,
+                )
+            )
+    sa, sb = a.summary, b.summary
+    diff.summary_deltas.append(_delta("quality_score", sa.quality_score, sb.quality_score))
+    for status in Status:
+        before_n = sa.checks_by_status.get(status, 0)
+        after_n = sb.checks_by_status.get(status, 0)
+        if before_n or after_n:
+            diff.summary_deltas.append(_delta(f"checks_{status.value}", before_n, after_n))
+    diff.summary_deltas.append(_delta("rows_compared", sa.rows_compared, sb.rows_compared))
+    diff.summary_deltas.append(_delta("duration_ms", a.duration_ms, b.duration_ms))
+    datasets_a = {(s.name, d.name): d for s in a.suites for d in s.datasets}
+    datasets_b = {(s.name, d.name): d for s in b.suites for d in s.datasets}
+    for key in sorted(set(datasets_a) | set(datasets_b)):
+        da, db = datasets_a.get(key), datasets_b.get(key)
+        table = f"{key[0]}.{key[1]}"
+        values: list[tuple[str, Any, Any]] = [
+            ("status", da.status.value if da else None, db.status.value if db else None),
+            (
+                "source_rows",
+                da.row_counts.source if da else None,
+                db.row_counts.source if db else None,
+            ),
+            (
+                "target_rows",
+                da.row_counts.target if da else None,
+                db.row_counts.target if db else None,
+            ),
+        ]
+        ra = da.reconciliation if da else None
+        rb = db.reconciliation if db else None
+        for name in ("matched", "mismatched", "missing_in_target", "extra_in_target"):
+            values.append(
+                (name, getattr(ra, name) if ra else None, getattr(rb, name) if rb else None)
+            )
+        for name, before_value, after_value in values:
+            if before_value != after_value:
+                diff.dataset_deltas.append(_delta(name, before_value, after_value, table=table))
+    return diff

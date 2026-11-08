@@ -12,7 +12,7 @@ from dvf.checks.context import CheckOutcome
 from dvf.compare.plan import ColumnPairing
 from dvf.core.datasets import DatasetSchema
 from dvf.core.enums import Dimension, SchemaCheck, Status
-from dvf.core.types import Compatibility, classify
+from dvf.core.types import CanonicalType, Compatibility, classify
 from dvf.models.results import ColumnSchemaDiff, SampleSet
 
 IMPLEMENTED = (
@@ -43,6 +43,9 @@ class SchemaInputs:
     """Configured keys as (source, target) names."""
     probe_target_uniqueness: UniquenessProbe | None = None
     target_enforces_constraints: bool = True
+    normalized_types: dict[str, tuple[CanonicalType, CanonicalType]] = field(default_factory=dict)
+    """Source and target types after each column's normalizers, by target column name; type
+    compatibility compares these instead of the declared types."""
 
 
 def _outcome(check: SchemaCheck, **kwargs: object) -> CheckOutcome:
@@ -209,14 +212,20 @@ def _type_compatibility(inputs: SchemaInputs) -> CheckOutcome:
     for pair in pairing.pairs:
         if pair.source is None:
             continue
-        result = classify(pair.source.type, pair.target.type)
-        same_logical = pair.source.type.logical is pair.target.type.logical
+        source_type, target_type = inputs.normalized_types.get(
+            pair.target.name, (pair.source.type, pair.target.type)
+        )
+        result = classify(source_type, target_type)
+        same_logical = source_type.logical is target_type.logical
+        reasons = list(result.reasons)
+        if pair.target.name in inputs.normalized_types:
+            reasons.append(f"compared after normalizers as {source_type} -> {target_type}")
         row: list[object] = [
             pair.target.name,
             pair.source.native_type,
             pair.target.native_type,
             result.level.value,
-            "; ".join(result.reasons),
+            "; ".join(reasons),
         ]
         if result.level is Compatibility.INCOMPATIBLE or (
             not same_logical and result.level is Compatibility.LOSSY

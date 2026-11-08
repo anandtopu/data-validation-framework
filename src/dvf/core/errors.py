@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from dvf.config.diagnostics import Diagnostic
@@ -82,6 +82,15 @@ class DependencyError(ExecutionError):
 
 class PlanError(ExecutionError):
     """A table cannot be compared as configured (for example, a key column does not exist)."""
+
+
+class DataValidationError(DvfError):
+    """In-pipeline validation stopped the pipeline: a check with action ``fail`` failed, or a
+    check could not be evaluated. :attr:`result` holds every check result."""
+
+    def __init__(self, message: str, *, result: Any = None) -> None:
+        super().__init__(message)
+        self.result = result
 
 
 def _quote_list(items: Sequence[str]) -> str:

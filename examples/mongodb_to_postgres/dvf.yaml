@@ -1,0 +1,95 @@
+# yaml-language-server: $schema=../../schemas/config.schema.json
+#
+# Reconcile orders in MongoDB, with their lines embedded in a `lines` array, against the
+# relational `orders` and `order_lines` tables in PostgreSQL.
+#
+# The data is synthetic and the MongoDB side carries seeded defects, so the run reports failures
+# on purpose: a missing line (order 1002), a changed quantity (1003), an extra line (1004), a
+# changed status (1005), and a total stored as a double instead of a Decimal128 (1007).
+#
+#   set DVF_EXAMPLE_MONGODB_URL=mongodb://localhost:27017
+#   set DVF_EXAMPLE_POSTGRES_URL=postgresql://user:password@localhost:5432/dvf
+#   uv run python load_data.py
+#   dvf run dvf.yaml
+#   uv run python load_data.py --drop
+#
+# (On macOS and Linux, use `export NAME=value` instead of `set NAME=value`.)
+version: 1
+
+project:
+  name: mongodb-to-postgres
+  description: Orders with embedded lines in MongoDB reconciled against PostgreSQL tables
+
+defaults:
+  engine: duckdb
+  sample_size: 20
+
+connections:
+  pg:
+    type: postgres
+    url: ${secret:env:DVF_EXAMPLE_POSTGRES_URL}
+    schema: ${env:DVF_EXAMPLE_PG_SCHEMA:-dvf_example}
+  mongo:
+    type: mongodb
+    uri: ${secret:env:DVF_EXAMPLE_MONGODB_URL}
+    database: ${env:DVF_EXAMPLE_MONGO_DB:-dvf_example}
+    read_preference: primaryPreferred
+    read_concern: majority
+
+suites:
+  - name: orders
+    source: pg
+    target: mongo
+    tables:
+      # Order headers: one document per order, nested fields mapped to columns.
+      - name: orders
+        source: { table: orders }
+        target:
+          table: orders
+          options:
+            fields:
+              order_id: order_id
+              customer_name: customer.name
+              order_date: order_date
+              status: status
+              total: total
+        keys: [order_id]
+        comparison:
+          strategies: [row_count, full_diff]
+        checks:
+          # SCH-13: sample the documents and check field presence and types.
+          - type: document_schema
+            side: target
+            severity: warning
+            fields:
+              order_id: integer
+              customer.name: string
+              order_date: date
+              status: string
+              total: decimal
+              lines: array
+              lines[].line_no: integer
+              lines[].sku: string
+              lines[].qty: integer
+              lines[].price: decimal
+
+      # Order lines: the `lines` array unwound into one row per line, reconciled against the
+      # child table per order (counts, totals, and a hash of the canonical lines), then row by
+      # row on (order_id, line_no) when an order differs.
+      - name: order_lines
+        source: { table: order_lines }
+        target:
+          table: orders
+          options:
+            unwind: { path: lines, keep: [order_id], index: line_index }
+        keys: [order_id, line_no]
+        columns:
+          exclude: [line_index]
+        comparison:
+          strategies: [nested]
+          group_by: [order_id]
+          on_mismatch: full_diff
+
+reports:
+  formats: [html, json, markdown]
+  output_dir: ./reports/${run.date}/${run.id}

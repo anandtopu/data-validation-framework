@@ -1118,6 +1118,21 @@ def _load_cli_plugins(ctx: typer.Context, registry: Any) -> None:
         raise typer.Exit(ExitCode.CONFIG_ERROR) from exc
 
 
+# Commands added by later phases live in their own modules; each module's register(app) adds its
+# commands. They import helpers from this module inside register(), after it is fully loaded.
+_COMMAND_MODULES = ("dvf.cli.discovery", "dvf.cli.migration", "dvf.cli.packs")
+
+
+def _register_command_modules() -> None:
+    import importlib
+
+    for module_name in _COMMAND_MODULES:
+        importlib.import_module(module_name).register(app)
+
+
+_register_command_modules()
+
+
 def main() -> None:
     """Console script entry point."""
     app()

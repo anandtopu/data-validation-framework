@@ -84,7 +84,7 @@ defaults:
     retry_backoff_s: 2.0            # first delay; it doubles on each retry
     memory_limit: 4GB               # local DuckDB engine; it spills to disk beyond it
     threads: 8                      # local DuckDB engine threads (default: all cores)
-    temp_dir: ./.dvf/spill          # local engine spill folder
+    temp_dir: ./.dvf/spill          # local engine spill folder, and staged NoSQL, RFC, and file data
     checkpoints: true               # save finished tables so --resume can continue a run
     state_dir: .dvf                 # checkpoints, saved results, and the default history store
 ```
@@ -156,9 +156,27 @@ tables:
 
 Each side is exactly one of `table`, `query`, or `path`, plus an optional `filter` and `as_of`. Normalizers accept `rtrim`, `{round: 2}`, `{round: {digits: 2}}`, or `{name: round, params: {digits: 2}}`.
 
+Two table options restrict both sides for migration checks and comparisons ([Migration validations](migration.md)):
+
+```yaml
+    window:                      # delta loads (MIG-02): compare start <= column < end
+      source_column: changed_at
+      target_column: src_changed_at
+      start: "${var:last_watermark}"
+      end: "${run.date}"
+    in_flight:                   # live replication (MIG-09): skip rows changed near the cutoff
+      column: last_modified
+      window: 15m
+      cutoff: "2026-11-30T22:00:00Z"
+```
+
+`window` takes `column` (both sides) or `source_column` and `target_column`, `start`, `end`, and `end_inclusive`. `in_flight` takes `column` (or one per side), `window`, `cutoff` (default: the run start), `exclude_keys_on_both_sides` (default `true`), and `max_keys`.
+
+Dataset `options` carry connector-specific settings: file format options ([Files](files.md)), document filters, projections, and array handling ([NoSQL](nosql.md)), or RFC read settings ([SAP](sap.md)).
+
 ### Checks
 
-Every check has `type` plus common fields: `name`, `description`, `severity`, `side`, `mostly` (share of rows that must pass), `where`, `tags`, `owner`, `enabled`, and `details` (custom fields copied into results). Run `dvf plugins list --kind check` for the available types; each type's fields are in the JSON Schema.
+Every check has `type` plus common fields: `name`, `description`, `severity`, `side`, `mostly` (share of rows that must pass), `where`, `tags`, `owner`, `enabled`, `details` (custom fields copied into results), and `action` (what `dvf.validate_dataframe` does with failing rows: `quarantine`, `drop`, `warn`, or `fail`; `dvf run` ignores it). Run `dvf plugins list --kind check` for the available types; each type's fields are in the JSON Schema.
 
 Suite and table names may contain letters, digits, underscores, and hyphens, because they form check IDs: `suite.table.type[.columns][.name]`.
 

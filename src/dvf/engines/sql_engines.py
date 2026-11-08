@@ -263,16 +263,33 @@ def is_local(job: DiffJob) -> bool:
 
 
 class AutoEngine(Engine):
-    """Pushdown when both datasets share a database connection, otherwise the local DuckDB engine
-    (which is also used for DuckDB-based connections, where it avoids repeating work)."""
+    """Pushdown when both datasets share a database connection; the Spark engine when both are
+    Spark datasets in one Spark application; otherwise the local DuckDB engine (which is also
+    used for DuckDB-based connections, where it avoids repeating work)."""
 
     name = "auto"
 
     def diff(self, job: DiffJob) -> DiffResult:
-        engine: Engine = (
-            PushdownEngine() if job.same_connection and not is_local(job) else DuckDBEngine()
-        )
+        engine: Engine
+        if _both_spark(job):
+            from dvf.engines.spark_engine import SparkEngine
+
+            engine = SparkEngine()
+        elif job.same_connection and not is_local(job):
+            engine = PushdownEngine()
+        else:
+            engine = DuckDBEngine()
         return engine.diff(job)
+
+
+def _both_spark(job: DiffJob) -> bool:
+    """Both sides are Spark datasets readable from one session (no data leaves Spark)."""
+    source, target = job.source.connector, job.target.connector
+    if source.dialect != "spark" or target.dialect != "spark":
+        return False
+    colocated = getattr(source, "colocated", None)
+    session = getattr(target, "session", None)
+    return bool(colocated is not None and session is not None and colocated(session))
 
 
 def _conform(batches: Iterator[pa.RecordBatch], schema: pa.Schema) -> Iterator[pa.RecordBatch]:

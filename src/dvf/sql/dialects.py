@@ -140,7 +140,24 @@ class Dialect:
     def regex_match(self, expr: str, pattern: str, *, full: bool) -> str:  # pragma: no cover
         raise UnsupportedFeatureError(f"{self.name} has no regular expression support")
 
+    def substring(self, expr: str, start: int | str, length: int | str) -> str:
+        """Up to ``length`` characters of ``expr`` from the 1-based position ``start``.
+
+        ``start`` and ``length`` are positive integer constants or integer SQL expressions.
+        """
+        return f"SUBSTRING({expr}, {start}, {length})"
+
     # ------------------------------------------------------------------ canonical forms
+    def date_from_iso(self, expr: str) -> str:
+        """The DATE written as ``YYYY-MM-DD`` in the text ``expr``, in the form :meth:`date_text`
+        reads. Callers validate the text first: an invalid date may raise an error."""
+        return f"CAST({expr} AS DATE)"
+
+    def time_from_iso(self, expr: str) -> str:
+        """The time of day written as ``HH:MM:SS`` in the text ``expr``, in the form
+        :meth:`time_text` reads. Callers validate the text first."""
+        return f"CAST({expr} AS TIME)"
+
     def integer_text(self, expr: str) -> str:
         return self.to_text(expr)
 
@@ -371,6 +388,16 @@ class SQLiteDialect(Dialect):
     def regex_match(self, expr: str, pattern: str, *, full: bool) -> str:
         return f"(dvf_regexp({self.literal(pattern)}, {expr}, {1 if full else 0}) = 1)"
 
+    def substring(self, expr: str, start: int | str, length: int | str) -> str:
+        # SUBSTRING is an alias only from SQLite 3.34.
+        return f"SUBSTR({expr}, {start}, {length})"
+
+    def date_from_iso(self, expr: str) -> str:
+        return expr  # SQLite stores dates as ISO text
+
+    def time_from_iso(self, expr: str) -> str:
+        return expr
+
     def integer_text(self, expr: str) -> str:
         return f"dvf_canon_integer({expr})"
 
@@ -423,6 +450,8 @@ _DIALECT_MODULES = {
     "bigquery": "dvf.sql.bigquery",
     "redshift": "dvf.sql.redshift",
     "databricks": "dvf.sql.databricks",
+    "spark": "dvf.sql.spark",
+    "hana": "dvf.sql.hana",
 }
 """Dialects defined in their own modules, imported on first use. Each module defines ``DIALECT``."""
 

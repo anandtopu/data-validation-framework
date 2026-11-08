@@ -90,6 +90,13 @@ class SnowflakeDialect(Dialect):
         return f"(REGEXP_INSTR({expr}, {self.literal(pattern)}) > 0)"
 
     # ------------------------------------------------------------------ canonical forms
+    def date_from_iso(self, expr: str) -> str:
+        # An explicit format: CAST follows the session's DATE_INPUT_FORMAT.
+        return f"TO_DATE({expr}, 'YYYY-MM-DD')"
+
+    def time_from_iso(self, expr: str) -> str:
+        return f"TO_TIME({expr}, 'HH24:MI:SS')"
+
     def round_decimal(self, expr: str, digits: int) -> str:
         d = int(digits)
         return f"CAST(ROUND({expr}, {d}) AS NUMBER(38, {d}))"

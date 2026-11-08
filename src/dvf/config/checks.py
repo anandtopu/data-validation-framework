@@ -42,6 +42,11 @@ class CheckConfig(StrictModel):
     enabled: bool = True
     details: dict[str, Any] = Field(default_factory=dict)
     """Custom details copied into every result of this check (for example requirement IDs)."""
+    action: Literal["fail", "warn", "drop", "quarantine"] | None = None
+    """In-pipeline mode (``dvf.validate_dataframe``): what happens to rows failing this check.
+    ``quarantine`` moves them to the quarantine frame, ``drop`` removes them, ``warn`` keeps them
+    and caps the result at a warning, and ``fail`` keeps them and raises when the check fails.
+    Defaults to the call's ``on_fail``. ``dvf run`` reports failures by severity and ignores it."""
 
     def target_columns(self) -> list[str]:
         """Columns this check is about, used to build its check ID."""

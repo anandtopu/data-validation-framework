@@ -118,6 +118,11 @@ class ConnectorPool:
             )
         connector: Connector = entry.implementation(name, conn_config, self._base_dir)
         connector.retry_policy = self.retry_policy
+        if execution.temp_dir and hasattr(connector, "temp_root"):
+            # Staged and converted files (NoSQL, RFC, Avro, Excel, ...) go to the run's temp dir.
+            root = Path(execution.temp_dir)
+            connector.temp_root = str(root if root.is_absolute() else self._base_dir / root)
+            Path(connector.temp_root).mkdir(parents=True, exist_ok=True)
         connector.open()
         return connector
 

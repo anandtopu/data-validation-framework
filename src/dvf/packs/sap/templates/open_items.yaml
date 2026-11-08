@@ -1,0 +1,63 @@
+# dvf SAP template: customer and vendor open items.
+#
+# Compares open items (BSID for customers, BSIK for vendors; compatibility views on ACDOCA in
+# S/4HANA) line by line between a source and a target, per company code, with SAP-aware
+# normalizers: ALPHA customer and vendor numbers, DATS dates, and the TCURX decimal shift of
+# document-currency amounts (WRBTR with WAERS).
+#
+# Use it with `extends:` (copy it with `dvf sap copy-template open_items`) and set:
+#
+#   vars:
+#     sap_connection: ecc_hana           # source connection (sap_hana, sap_rfc, or extracts)
+#     target_connection: s4_hana         # target connection
+#     target_prefix: ""                  # prefix of target tables, for example "FINANCE."
+#     company_codes_filter: "BUKRS IN ('1000', '2000')"
+#     amount_side: both                  # 'both' when the target is SAP too, 'source' when it
+#                                        # holds external amounts (100 JPY stored as 100)
+#
+# The filter is SQL in each side's dialect; with sap_rfc as the source, put the condition in
+# `source: {options: {where: ...}}` instead (Open SQL) and set `filter` to TRUE.
+version: 1
+suites:
+  - name: sap_open_items
+    description: Customer and vendor open items per company code
+    source: ${var:sap_connection}
+    target: ${var:target_connection}
+    tags: [sap, finance, open-items]
+    tables:
+      - name: customer_open_items
+        source: { table: BSID, filter: "${var:company_codes_filter}" }
+        target: { table: "${var:target_prefix}BSID", filter: "${var:company_codes_filter}" }
+        keys: [BUKRS, BELNR, GJAHR, BUZEI]
+        columns:
+          include: [KUNNR, BUDAT, WAERS, WRBTR, SHKZG, ZFBDT]
+          mappings:
+            - { source: KUNNR, target: KUNNR, normalize: [sap_alpha] }
+            - { source: BUDAT, target: BUDAT, normalize: [sap_dats] }
+            - { source: ZFBDT, target: ZFBDT, normalize: [sap_dats] }
+            - source: WRBTR
+              target: WRBTR
+              normalize:
+                - sap_curr: { currency_column: WAERS, side: "${var:amount_side}" }
+        comparison:
+          strategies: [row_count, aggregate, full_diff]
+          group_by: [BUKRS]
+          aggregates: [count, sum]
+      - name: vendor_open_items
+        source: { table: BSIK, filter: "${var:company_codes_filter}" }
+        target: { table: "${var:target_prefix}BSIK", filter: "${var:company_codes_filter}" }
+        keys: [BUKRS, BELNR, GJAHR, BUZEI]
+        columns:
+          include: [LIFNR, BUDAT, WAERS, WRBTR, SHKZG, ZFBDT]
+          mappings:
+            - { source: LIFNR, target: LIFNR, normalize: [sap_alpha] }
+            - { source: BUDAT, target: BUDAT, normalize: [sap_dats] }
+            - { source: ZFBDT, target: ZFBDT, normalize: [sap_dats] }
+            - source: WRBTR
+              target: WRBTR
+              normalize:
+                - sap_curr: { currency_column: WAERS, side: "${var:amount_side}" }
+        comparison:
+          strategies: [row_count, aggregate, full_diff]
+          group_by: [BUKRS]
+          aggregates: [count, sum]

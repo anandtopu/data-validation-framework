@@ -240,18 +240,46 @@ class ComparisonPlan:
 NormalizerFactory = Callable[[NormalizerRef], Normalizer]
 
 
+def normalized_types(
+    pair: ColumnPair, factory: NormalizerFactory
+) -> tuple[CanonicalType, CanonicalType] | None:
+    """The pair's source and target types after its normalizers, or ``None`` when it has no
+    normalizers (schema checks then compare the declared types). A ``DATS`` string normalized
+    with ``sap_dats`` compares as a date."""
+    refs = (
+        list(pair.key.normalize)
+        if pair.key
+        else list(pair.mapping.normalize)
+        if pair.mapping
+        else []
+    )
+    if not refs or pair.source is None:
+        return None
+    types: list[CanonicalType] = []
+    for side, ctype in (("source", pair.source.type), ("target", pair.target.type)):
+        current = ctype
+        for ref in refs:
+            normalizer = factory(ref).for_side(side)
+            if normalizer is None or not normalizer.applies_to(current):
+                continue
+            current = normalizer.output_type(current)
+        types.append(current)
+    return types[0], types[1]
+
+
 def _side(
     raw: str,
     ctype: CanonicalType,
     refs: list[NormalizerRef],
     factory: NormalizerFactory,
     dialect: Dialect,
+    side: str = "source",
 ) -> tuple[str, CanonicalType, tuple[Normalizer, ...]]:
     expr, current = raw, ctype
     applied: list[Normalizer] = []
     for ref in refs:
-        normalizer = factory(ref)
-        if not normalizer.applies_to(current):
+        normalizer = factory(ref).for_side(side)
+        if normalizer is None or not normalizer.applies_to(current):
             continue
         expr = normalizer.to_sql(expr, dialect, current)
         current = normalizer.output_type(current)
@@ -326,9 +354,11 @@ def build_plan(
             src_raw = f"({pair.source_expr})"
             src_type = expr_types.get(pair.source_expr, CanonicalType.unknown())
         tgt_raw = target_dialect.quote(pair.target.name)
-        src_norm, src_ctype, src_applied = _side(src_raw, src_type, refs, factory, source_dialect)
+        src_norm, src_ctype, src_applied = _side(
+            src_raw, src_type, refs, factory, source_dialect, "source"
+        )
         tgt_norm, tgt_ctype, tgt_applied = _side(
-            tgt_raw, pair.target.type, refs, factory, target_dialect
+            tgt_raw, pair.target.type, refs, factory, target_dialect, "target"
         )
         pair_spec = resolve_pair(src_ctype, tgt_ctype, normalization, column_tolerance)
         if pair.is_key and pair_spec.numeric is not None:

@@ -1,0 +1,69 @@
+# dvf SAP template: GL balances and trial balance per company code and fiscal period.
+#
+# Compares general ledger balances of the source (ECC new GL line items, FAGLFLEXA) with the
+# target (S/4HANA ACDOCA by default, or any table with the same columns) per company code, fiscal
+# year, posting period, and account, within an amount tolerance. Both sides are SQL queries, so
+# both connections must run SQL: sap_hana, or a database holding the extracted tables (not sap_rfc).
+# A trial balance check asserts that every company code and period sums to zero on each side.
+#
+# Use it with `extends:` (copy it with `dvf sap copy-template gl_balances`) and set:
+#
+#   vars:
+#     sap_connection: ecc_hana          # source connection name
+#     target_connection: s4_hana        # target connection name
+#     source_table: FAGLFLEXA           # ECC line items (or SAPSR3.FAGLFLEXA)
+#     target_table: ACDOCA              # S/4HANA universal journal, or your warehouse table
+#     ledger: "0L"
+#     company_codes: "'1000', '2000'"   # an SQL list
+#     fiscal_year: "2025"
+#     amount_tolerance: 0.005
+#
+# The client is filtered by the sap_hana connection (`client:`); amounts are in local currency
+# (HSL), which SAP stores with the decimals of the field, so no currency shift is needed when
+# both sides are SAP. Add `{sap_curr: ...}` to BALANCE when the target holds external amounts.
+version: 1
+suites:
+  - name: sap_gl_balances
+    description: GL balances and trial balance per company code and fiscal period
+    source: ${var:sap_connection}
+    target: ${var:target_connection}
+    tags: [sap, finance, gl]
+    tables:
+      - name: gl_balances
+        description: Balance per company code, year, period, and account
+        source:
+          query: >-
+            SELECT RBUKRS AS BUKRS, RYEAR AS GJAHR, POPER, RACCT, SUM(HSL) AS BALANCE
+            FROM ${var:source_table}
+            WHERE RLDNR = '${var:ledger}' AND RBUKRS IN (${var:company_codes})
+            AND RYEAR = '${var:fiscal_year}'
+            GROUP BY RBUKRS, RYEAR, POPER, RACCT
+        target:
+          query: >-
+            SELECT RBUKRS AS BUKRS, GJAHR, POPER, RACCT, SUM(HSL) AS BALANCE
+            FROM ${var:target_table}
+            WHERE RLDNR = '${var:ledger}' AND RBUKRS IN (${var:company_codes})
+            AND GJAHR = '${var:fiscal_year}'
+            GROUP BY RBUKRS, GJAHR, POPER, RACCT
+        keys: [BUKRS, GJAHR, POPER, RACCT]
+        schema_checks: [columns_present]
+        comparison:
+          strategies: [row_count, aggregate, full_diff]
+          group_by: [BUKRS, POPER]
+          aggregates: [count, sum]
+          tolerance: { numeric_abs: "${var:amount_tolerance}" }
+        checks:
+          - type: custom_sql
+            name: trial_balance_source
+            side: source
+            sql: >-
+              SELECT BUKRS, GJAHR, POPER, SUM(BALANCE) AS TOTAL FROM {table}
+              GROUP BY BUKRS, GJAHR, POPER
+              HAVING ABS(SUM(BALANCE)) > ${var:amount_tolerance}
+          - type: custom_sql
+            name: trial_balance_target
+            side: target
+            sql: >-
+              SELECT BUKRS, GJAHR, POPER, SUM(BALANCE) AS TOTAL FROM {table}
+              GROUP BY BUKRS, GJAHR, POPER
+              HAVING ABS(SUM(BALANCE)) > ${var:amount_tolerance}

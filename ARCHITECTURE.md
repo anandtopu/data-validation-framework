@@ -10,10 +10,10 @@ Significant decisions are recorded as ADRs in [docs/adr](docs/adr/README.md). Th
 | 0 | Foundations: config system, canonical types, result model, plugin registry, hooks, secrets, CLI skeleton, CI | **Done** |
 | 1 | Local MVP: DuckDB, SQLite, PostgreSQL, files; core checks and comparisons; JSON, HTML, JUnit, Markdown reports | **Done** |
 | 2 | Scale and debugging: two-phase diffs, bucketed hashing, bisection, partitions, parallel executor, checkpoints and resume, explain/trace/debug/rerun, history, baselines, waivers, Excel, extracts, sinks, seven more connectors | **Done** |
-| 3 | Spark, lakehouse formats, NoSQL, SAP, migration validations, discovery and mapping import | Next |
-| 4 | Integrations, containers, docs site, 1.0 release | Planned |
+| 3 | Big data and specialized sources: Spark engine and connector, lakehouse and file formats, file checks, NoSQL and SAP packs, migration validations MIG-01 to MIG-14, in-pipeline `validate_dataframe`, discovery, mapping and contract import, profiling and suggestions | **Done** |
+| 4 | Integrations, containers, docs site, 1.0 release | Next |
 
-Phase 1 executes configurations end to end; its execution model is in [ADR 0007](docs/adr/0007-phase1-execution-model.md). Phase 2 makes it scale and explain itself: two-phase diffs, checksum search, partitions, a parallel executor with per-connection caps, checkpoints, history, waivers, and debugging tools ([ADR 0008](docs/adr/0008-phase2-scale-and-debugging.md)).
+Phase 1 executes configurations end to end; its execution model is in [ADR 0007](docs/adr/0007-phase1-execution-model.md). Phase 2 makes it scale and explain itself: two-phase diffs, checksum search, partitions, a parallel executor with per-connection caps, checkpoints, history, waivers, and debugging tools ([ADR 0008](docs/adr/0008-phase2-scale-and-debugging.md)). Phase 3 adds packs of components for Spark, files and lakehouse tables, NoSQL, SAP, migration validations, and discovery, staged connectors for systems without SQL, and in-pipeline validation ([ADR 0009](docs/adr/0009-phase3-big-data-and-specialized-sources.md)).
 
 ## Design principles
 
@@ -44,7 +44,7 @@ flowchart LR
 
 | Layer | Package | Phase | Responsibility |
 |---|---|---|---|
-| Public API | `dvf.api`, `dvf.plugins`, `dvf.models` | 0 | The only supported import surface for users and plugin authors |
+| Public API | `dvf.api`, `dvf.plugins`, `dvf.models` | 0 | The only supported import surface for users and plugin authors; `dvf.run` and `dvf.validate_dataframe` are re-exported at the top level |
 | CLI | `dvf.cli` | 0 | Typer application; thin wrapper over `dvf.api` |
 | Configuration | `dvf.config` | 0 | File formats, layering, interpolation, inheritance, polymorphic validation, diagnostics, JSON Schema export |
 | Core domain | `dvf.core` | 0 | Canonical type system, dataset and schema models, enums, errors |
@@ -52,15 +52,18 @@ flowchart LR
 | Plugins | `dvf.plugins` | 0 | Registry, entry-point discovery, local plugin loading, pluggy hooks, built-in declarations |
 | Security | `dvf.security` | 0 | Secret providers, secret references, redaction |
 | Observability | `dvf.observability` | 0 | Logging configuration, JSON logs, redaction filter |
-| Planning | `dvf.compare.plan`, `dvf.compare.partitions`, `dvf.execution.selectors` | 1–2 | Column pairing (keys, mappings, renames, include and exclude), comparison plans, pattern expansion, `--only` selectors (Phase 1); partitions (Phase 2); discovery (Phase 3) |
-| Execution | `dvf.execution` | 1–2 | Runner with error containment, run context, query recording, hooks (Phase 1); parallel executor with per-connection leases, checkpoints and resume, retries, waivers, history, extracts and repro files (Phase 2) |
-| Engines | `dvf.engines` | 1–3 | Two-phase row-level diff: `pushdown`, `duckdb`, `polars`, `auto` (Phases 1–2); Spark (Phase 3) |
-| Connectors | `dvf.connectors` | 1–3 | DuckDB, SQLite, PostgreSQL, files (Phase 1); SQL Server, Oracle, MySQL, and the beta Snowflake, BigQuery, Redshift, Databricks connectors (Phase 2); NoSQL and SAP (Phase 3) |
+| Planning | `dvf.compare.plan`, `dvf.compare.partitions`, `dvf.execution.selectors` | 1–2 | Column pairing (keys, mappings, renames, include and exclude), comparison plans, pattern expansion, `--only` selectors (Phase 1); partitions (Phase 2) |
+| Discovery | `dvf.discovery` | 3 | `discover`, `import-mapping`, `import-contract` and `export-contract` (ODCS v3), `profile`, `suggest`, contract conformance |
+| Packs | `dvf.packs` | 3 | Self-registering groups of components: `spark`, `files`, `nosql`, `sap`, `migration`, `discovery` |
+| In-pipeline | `dvf.dataframes` | 3 | `validate_dataframe` and `foreach_batch_validator` over an in-process `dataframe` connection or the Spark session |
+| Execution | `dvf.execution` | 1–2 | Runner with error containment, run context, query recording, hooks (Phase 1); parallel executor with per-connection leases, checkpoints and resume, retries, waivers, history, extracts and repro files (Phase 2); pair checks, window and in-flight filters, named baselines and run comparison (Phase 3) |
+| Engines | `dvf.engines` | 1–3 | Two-phase row-level diff: `pushdown`, `duckdb`, `polars`, `auto` (Phases 1–2); `spark` (Phase 3) |
+| Connectors | `dvf.connectors` | 1–3 | DuckDB, SQLite, PostgreSQL, files (Phase 1); SQL Server, Oracle, MySQL, and the beta Snowflake, BigQuery, Redshift, Databricks connectors (Phase 2); Spark, MongoDB, lakehouse formats in `files`, and the beta Cassandra, DynamoDB, Cosmos DB, SAP HANA, and SAP RFC connectors; `StagedConnector` for systems without SQL (Phase 3) |
 | SQL dialects | `dvf.sql` | 1–2 | Per-dialect primitives for canonical forms, hashing, and buckets; one module per dialect |
-| Normalization | `dvf.normalize` | 1 | Canonicalization (Python reference, SQL per dialect, Polars) and normalizers |
-| Comparison | `dvf.compare` | 1–2 | Row count, aggregate, profile, row hash, full diff, mismatch classifier (Phase 1); checksum search for `hash_bucket` and `bisect` (Phase 2) |
-| Checks | `dvf.checks` | 1–3 | Schema checks SCH-01 to SCH-06 and data quality checks (Phase 1); migration checks (Phase 3) |
-| Reporting | `dvf.reporting` | 1–2 | JSON, HTML, JUnit, Markdown (Phase 1); Excel, waivers, baselines, trends (Phase 2) |
+| Normalization | `dvf.normalize`, `dvf.packs.sap` | 1, 3 | Canonicalization (Python reference, SQL per dialect, Polars) and normalizers; SAP normalizers (Phase 3) |
+| Comparison | `dvf.compare` | 1–2 | Row count, aggregate, profile, row hash, full diff, mismatch classifier (Phase 1); checksum search for `hash_bucket` and `bisect` (Phase 2); `nested` child-row reconciliation (Phase 3, in the NoSQL pack) |
+| Checks | `dvf.checks`, packs | 1–3 | Schema checks SCH-01 to SCH-06 and data quality checks (Phase 1); pair checks, migration checks, file checks, contract and document schema checks (Phase 3) |
+| Reporting | `dvf.reporting` | 1–3 | JSON, HTML, JUnit, Markdown (Phase 1); Excel, waivers, baselines, trends (Phase 2); cutover sign-off (Phase 3) |
 | Sinks | `dvf.sinks` | 2 | DuckDB, SQLite, and PostgreSQL result tables |
 | Debugging | `dvf.diagnose`, `dvf.debug` | 2 | `explain`, `trace`, loading earlier runs; `dvf.debug.load` is the notebook helper |
 
@@ -122,6 +125,8 @@ flowchart TB
 5. **Parallel tables.** A thread pool runs `max_parallel_tables` tables. Each task leases a slot of every connection it may use (sorted, so leases never deadlock) and gets its own sessions through `Connector.fork()`.
 6. **Two-phase diffs and checksum search.** Row diffs compare keys and row hashes first, then fetch full values for differing rows only. `hash_bucket` and `bisect` compare bucket checksums inside each database and drill into differing buckets before any row moves.
 7. **Checkpoints.** Finished tables and partitions are written atomically under `.dvf/runs/<run_id>/`; `--resume` continues a run from them. History, baselines, waivers, extracts, repro files, and sinks are applied as results are recorded or at the end of the run.
+8. **Staged sources.** Connectors for systems without SQL (NoSQL, SAP RFC) fetch each dataset once as Arrow batches, stage it as Parquet, and expose it as a DuckDB view, so every check and strategy runs unchanged. Lakehouse tables (Delta, Iceberg, ORC) are registered in DuckDB as Arrow datasets; Avro, Excel, fixed-width, and XML files are converted to Parquet on first use.
+9. **Pair checks.** Checks that need both datasets of a table (`PairCheck`) receive the comparison inputs once per table and state their rule in SQL, inside the database when both sides share a connection, otherwise in a local DuckDB workspace.
 
 ## Canonical type system
 

@@ -17,6 +17,7 @@ Example::
 from __future__ import annotations
 
 from dvf.checks.context import CheckContext, CheckOutcome
+from dvf.checks.pair import CheckEnvironment, EnvironmentAware, PairColumn, PairContext
 from dvf.config.checks import CheckConfig
 from dvf.config.connections import ConnectionConfig
 from dvf.config.notifications import NotificationConfig
@@ -29,6 +30,7 @@ from dvf.plugins.base import (
     Connector,
     Normalizer,
     Notifier,
+    PairCheck,
     Relation,
     Reporter,
     ResultSink,
@@ -65,6 +67,7 @@ __all__ = [
     "Check",
     "CheckConfig",
     "CheckContext",
+    "CheckEnvironment",
     "CheckOutcome",
     "Comparator",
     "Component",
@@ -72,9 +75,13 @@ __all__ = [
     "ConnectionReport",
     "Connector",
     "Dimension",
+    "EnvironmentAware",
     "Normalizer",
     "NotificationConfig",
     "Notifier",
+    "PairCheck",
+    "PairColumn",
+    "PairContext",
     "PluginEntry",
     "PluginKind",
     "PluginLoadFailure",

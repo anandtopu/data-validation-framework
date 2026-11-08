@@ -50,9 +50,13 @@ All tasks run through [nox](https://nox.thea.codes/) so they behave the same on 
   | `DVF_TEST_MYSQL_URL` | `mysql://root:password@localhost:3306/dvf` |
   | `DVF_TEST_MSSQL_URL` | `mssql://sa:Password1@127.0.0.1:1433/master?TrustServerCertificate=yes` |
   | `DVF_TEST_ORACLE_URL` | `oracle://dvf_test:password@localhost:1521/FREEPDB1` (create the user with the image's `APP_USER`; the name `dvf` clashes with an Oracle role) |
+  | `DVF_TEST_MONGODB_URL` | `mongodb://localhost:27017` |
+  | `DVF_TEST_DYNAMODB_URL` | `http://localhost:8000` (DynamoDB Local) |
   | `DVF_TEST_SNOWFLAKE`, `DVF_TEST_BIGQUERY`, `DVF_TEST_REDSHIFT`, `DVF_TEST_DATABRICKS` | a JSON object of connection settings |
 
   Use throwaway local containers and test passwords only, for example `mysql:8.4`, `mcr.microsoft.com/mssql/server:2022-latest` (it requires accepting Microsoft's EULA with `ACCEPT_EULA=Y`), and `gvenzl/oracle-free:23-slim`, as in the CI integration job.
+  If your container runtime cannot publish ports (for example a Podman machine whose firewall rules fail), run the containers with `--network host` and point the variables at `localhost`.
+- **Spark tests** (marker `spark`) start a local Spark session and need Java 17 or later (Java 21 in CI). They skip when Java or pyspark is missing; select them with `-m spark` or exclude them with `-m "not spark"`.
 - **Connector maturity.** Register a connector with `maturity="beta"` until its integration, parity, and seeded-defect tests have passed against a live system.
 - **Performance.** Changes to engines, canonical SQL, or the runner should keep `uv run nox -s benchmark` within 15% of the baseline.
 - **Schemas.** If you change configuration or result models, run `uv run nox -s schemas` and commit the regenerated files. A test fails if they are out of date.

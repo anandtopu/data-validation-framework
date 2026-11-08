@@ -248,6 +248,26 @@ def _attach_implementations(registry: Registry) -> None:
                 extra=declared.extra if declared else None,
                 maturity="beta" if kind is PluginKind.CONNECTOR and name in beta else "stable",
             )
+    from dvf.dataframes import DataFrameConnector, SparkFrameConnector
+
+    registry.register(
+        PluginKind.CONNECTOR,
+        "dataframe",
+        DataFrameConnector,
+        description="In-process pandas, Polars, or Arrow data (dvf.validate_dataframe)",
+        origin="builtin",
+    )
+    registry.register(
+        PluginKind.CONNECTOR,
+        "spark_dataframe",
+        SparkFrameConnector,
+        description="In-process Spark DataFrame (dvf.validate_dataframe)",
+        origin="builtin",
+        extra="spark",
+    )
+    from dvf.packs import register_packs
+
+    register_packs(registry)
 
 
 _BETA_CONNECTORS = ("snowflake", "bigquery", "redshift", "databricks")

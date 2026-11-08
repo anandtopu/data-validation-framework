@@ -4,9 +4,9 @@
 
 `dvf` validates schemas and data quality, reconciles source and target datasets at scale, and produces detailed, auditable reports. It is built for migration projects (SAP, on-premise databases to cloud warehouses, SQL to NoSQL) and for data engineering pipelines (PySpark, Databricks, Parquet, Avro, JSON, CSV).
 
-> **Project status: Phase 2 (scale and debugging), pre-alpha.**
-> dvf checks and compares data in local files and databases (DuckDB, SQLite, PostgreSQL, SQL Server, Oracle, MySQL 8, and the beta Snowflake, BigQuery, Redshift, and Databricks connectors), scales to large tables with bucketed checksums and parallel execution, and explains every failure.
-> Spark, lakehouse formats, SAP, and NoSQL arrive in Phase 3.
+> **Project status: Phase 3 (big data and specialized sources), pre-alpha.**
+> dvf checks and compares data in files and lakehouse tables, relational databases, MongoDB, and Spark, scales to large tables with bucketed checksums and parallel execution, explains every failure, covers the migration checklist (MIG-01 to MIG-14), and validates DataFrames inside pipelines.
+> Docker images, CI templates, orchestrator examples, notifications, and the 1.0 release arrive in Phase 4.
 > See [ARCHITECTURE.md](ARCHITECTURE.md) for the roadmap and [BUILD_PROMPT.md](BUILD_PROMPT.md) for the full specification.
 
 ## What works today
@@ -20,6 +20,9 @@
 | `dvf explain <file>` | Shows the plan and the SQL each step would run, without running it |
 | `dvf trace <file> --table <t> --key <k>` | Follows one record through every normalization step on both sides |
 | `dvf debug <run_id> [check]`, `dvf rerun <run_id>`, `dvf history <file>` | Drills into an earlier run, reruns what failed, lists runs |
+| `dvf discover`, `dvf import-mapping`, `dvf import-contract` | Generates a configuration from two databases' metadata, a source-to-target mapping sheet, or an ODCS v3 contract |
+| `dvf profile <file>`, `dvf suggest <file>` | Profiles columns, and proposes checks with the evidence for each |
+| `dvf baseline capture <file>`, `dvf history compare <a> <b>` | Captures pre-migration metrics; compares two rehearsal runs |
 | `dvf report --from results.json -f html -o <dir>` | Re-renders reports from a results document, without touching data |
 | `dvf connections test <file>` | Opens every connection and runs a trivial query |
 | `dvf validate-config <file>` | Validates a configuration, reporting errors with file, line, and column |
@@ -29,13 +32,16 @@
 
 | Area | Ready |
 |---|---|
-| Connectors | `duckdb`, `sqlite`, `files` (CSV, TSV, Parquet, JSON, NDJSON), `postgres`, `mssql`, `oracle`, `mysql` (each with its pip extra, for example `pip install 'dvf[mssql]'`); beta: `snowflake`, `bigquery`, `redshift`, `databricks` |
-| Engines | `auto`, `pushdown` (diff inside one database), `duckdb` (local, spills to disk, memory limit), `polars` (`dvf[polars]`); full diffs fetch values only for rows that differ |
-| Schema checks | Object existence, column presence, type compatibility, length and precision, nullability, constraints (SCH-01 to SCH-06) |
-| Data quality checks | `not_null`, `not_blank`, `null_ratio`, `unique`, `regex`, `allowed_values`, `range`, `length`, `referential_integrity`, `custom_sql`, `expression`, `row_count_range`, `freshness` |
-| Comparisons | `row_count` (grouped too), `aggregate` control totals, `profile`, `row_hash`, `hash_bucket` and `bisect` (checksum search that moves only differing rows), `full_diff` with mismatch classification and fix hints; partitions |
+| Connectors | `duckdb`, `sqlite`, `files` (CSV, TSV, Parquet, JSON, NDJSON, ORC, Avro, Excel, fixed width, XML, Delta Lake, Iceberg), `postgres`, `mssql`, `oracle`, `mysql`, `mongodb`, `spark` (each with its pip extra, for example `pip install 'dvf[mssql]'`); beta: `snowflake`, `bigquery`, `redshift`, `databricks`, `cassandra`, `dynamodb`, `cosmos`, `sap_hana`, `sap_rfc` |
+| Engines | `auto`, `pushdown` (diff inside one database), `duckdb` (local, spills to disk, memory limit), `polars` (`dvf[polars]`), `spark` (`dvf[spark]`); full diffs fetch values only for rows that differ |
+| Schema checks | Object existence, column presence, type compatibility, length and precision, nullability, constraints (SCH-01 to SCH-06), contract conformance (SCH-12), document schemas (SCH-13) |
+| Data quality checks | `not_null`, `not_blank`, `null_ratio`, `unique`, `regex`, `allowed_values`, `range`, `length`, `referential_integrity`, `custom_sql`, `expression`, `row_count_range`, `freshness`; file checks (`file_exists`, `file_checksum`, `control_totals`, `bad_records`, and more) |
+| Migration checks | MIG-01 to MIG-14: scope reconciliation, delta windows and CDC, idempotency, SCD Type 2, deletes, key maps, audit columns, cutover sign-off, in-flight windows, character sets, DST edge cases, sentinel substitutions, business parity, baselines |
+| Comparisons | `row_count` (grouped too), `aggregate` control totals, `profile`, `row_hash`, `hash_bucket` and `bisect` (checksum search that moves only differing rows), `full_diff` with mismatch classification and fix hints, `nested` (embedded arrays against child tables); partitions |
+| SAP | Normalizers `sap_alpha`, `sap_matnr_length`, `sap_dats`, `sap_tims`, `sap_bool`, `sap_curr`, `sap_quan`, `sap_numc`, `sap_spras`; DDIC schemas; business object templates |
+| In-pipeline | `dvf.validate_dataframe(df, checks, on_fail="quarantine")` for pandas, Polars, Arrow, and Spark, with `foreachBatch` support |
 | Execution | Parallel tables with per-connection caps, checkpoints and resume, retries, waivers, run history with baselines and trends |
-| Reports | Self-contained HTML, canonical JSON, JUnit XML, Markdown, Excel (`dvf[excel]`); extracts and repro files per failed check; result sinks (DuckDB, SQLite, PostgreSQL) |
+| Reports | Self-contained HTML, canonical JSON, JUnit XML, Markdown, Excel (`dvf[excel]`), cutover sign-off; extracts and repro files per failed check; result sinks (DuckDB, SQLite, PostgreSQL) |
 
 Exit codes: `0` passed, `1` validation failures (at or above `--fail-on`, or below `--min-score`), `2` execution errors or an interrupted run, `3` configuration errors.
 
@@ -101,7 +107,32 @@ Configuration supports YAML, JSON, TOML, `.properties`, and `.ini`, with:
 - `${env:NAME}`, `${var:name}`, and `${secret:provider:reference}` interpolation
 - defaults inherited from project to suite to table
 
-See [docs/configuration.md](docs/configuration.md).
+See [docs/configuration.md](docs/configuration.md). To start from existing systems instead of writing configuration by hand:
+
+```bash
+uv run dvf discover --source duckdb:///legacy.duckdb --target ./curated -o dvf.yaml
+```
+
+```bash
+uv run dvf suggest dvf.yaml -o checks.yaml
+```
+
+## In a pipeline
+
+```python
+import dvf
+
+valid, quarantine, result = dvf.validate_dataframe(
+    df,
+    checks=[
+        {"type": "not_null", "columns": ["order_id"]},
+        {"type": "range", "column": "amount", "min": 0},
+    ],
+    on_fail="quarantine",
+)
+```
+
+`quarantine` holds the failing rows with a `dvf_reasons` column. See [docs/pipelines.md](docs/pipelines.md).
 
 ## Extending dvf
 

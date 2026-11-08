@@ -1,0 +1,63 @@
+# dvf SAP template: material master by plant and sales organization.
+#
+# Compares the material master between a source (often ECC, MATNR CHAR 18) and a target (often
+# S/4HANA, MATNR CHAR 40): general data (MARA), plant data (MARC, counted per plant), and sales
+# data (MVKE, counted per sales organization and distribution channel). Material numbers go
+# through sap_matnr_length, so 18- and 40-character forms compare equal.
+#
+# Use it with `extends:` (copy it with `dvf sap copy-template material_master`) and set:
+#
+#   vars:
+#     sap_connection: ecc_hana        # source connection
+#     target_connection: s4_hana      # target connection
+#     target_prefix: ""               # prefix of target tables, for example "MDM."
+#     plants_filter: "WERKS IN ('1000', '1010')"
+#     sales_orgs_filter: "VKORG IN ('1000')"
+version: 1
+suites:
+  - name: sap_material_master
+    description: Material master general, plant, and sales data
+    source: ${var:sap_connection}
+    target: ${var:target_connection}
+    tags: [sap, master-data, material]
+    tables:
+      - name: materials
+        source: { table: MARA }
+        target: { table: "${var:target_prefix}MARA" }
+        keys:
+          - { source: MATNR, normalize: [sap_matnr_length] }
+        columns:
+          include: [MTART, MATKL, MEINS, BRGEW, NTGEW, GEWEI, ERSDA, LVORM]
+          mappings:
+            - { source: ERSDA, target: ERSDA, normalize: [sap_dats] }
+            - { source: LVORM, target: LVORM, normalize: [sap_bool] }
+        comparison:
+          strategies: [row_count, aggregate, full_diff]
+          group_by: [MTART]
+      - name: materials_by_plant
+        source: { table: MARC, filter: "${var:plants_filter}" }
+        target: { table: "${var:target_prefix}MARC", filter: "${var:plants_filter}" }
+        keys:
+          - { source: MATNR, normalize: [sap_matnr_length] }
+          - { source: WERKS }
+        columns:
+          include: [MMSTA, DISPO, DISMM, BESKZ, LVORM]
+          mappings:
+            - { source: LVORM, target: LVORM, normalize: [sap_bool] }
+        comparison:
+          strategies: [row_count, full_diff]
+          group_by: [WERKS]
+      - name: materials_by_sales_org
+        source: { table: MVKE, filter: "${var:sales_orgs_filter}" }
+        target: { table: "${var:target_prefix}MVKE", filter: "${var:sales_orgs_filter}" }
+        keys:
+          - { source: MATNR, normalize: [sap_matnr_length] }
+          - { source: VKORG }
+          - { source: VTWEG }
+        columns:
+          include: [VMSTA, DWERK, KONDM, MTPOS, LVORM]
+          mappings:
+            - { source: LVORM, target: LVORM, normalize: [sap_bool] }
+        comparison:
+          strategies: [row_count, full_diff]
+          group_by: [VKORG, VTWEG]

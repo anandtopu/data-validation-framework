@@ -355,7 +355,17 @@ _STRATEGY = {
 
 
 def test_every_builtin_normalizer_has_a_parity_case() -> None:
+    from dvf.plugins.registry import PluginKind, new_registry
+    from tests.parity.test_sap_parity import SAP_PARITY_CASES
+
     assert set(_NORMALIZER_INPUTS) == set(BUILTIN_NORMALIZERS)
+    ready = {
+        e.name
+        for e in new_registry().entries(PluginKind.NORMALIZER)
+        if e.ready and e.origin == "builtin"
+    }
+    # Pack normalizers (SAP) have their parity cases in their own modules.
+    assert ready == set(_NORMALIZER_INPUTS) | set(SAP_PARITY_CASES)
 
 
 @pytest.mark.parametrize("name", sorted(_NORMALIZER_INPUTS))

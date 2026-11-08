@@ -1,0 +1,134 @@
+# A synthetic ODCS v3.1 data contract for 'dvf import-contract' and the 'contract' check (SCH-12).
+#
+#   dvf import-contract examples/discovery/orders.odcs.yaml -o contract-checks.yaml
+#
+# The text and custom rules below are on purpose: dvf lists them as not converted, with the reason.
+apiVersion: v3.1.0
+kind: DataContract
+id: 7d0c2f4e-shop-orders
+name: shop_orders
+version: 1.2.0
+status: active
+domain: sales
+description:
+  purpose: Orders and customers of the web shop, as delivered to the analytics platform.
+
+servers:
+  - server: analytics
+    type: postgresql
+    host: analytics.example.internal
+    port: 5432
+    database: analytics
+    schema: shop
+  - server: local
+    type: duckdb
+    database: ./shop.duckdb
+
+schema:
+  - name: customers
+    physicalName: customers
+    physicalType: table
+    description: One row per customer.
+    properties:
+      - name: customer_id
+        logicalType: integer
+        physicalType: integer
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+      - name: email
+        logicalType: string
+        physicalType: varchar(254)
+        required: true
+        unique: true
+        logicalTypeOptions:
+          format: email
+          maxLength: 254
+        classification: restricted
+      - name: country_code
+        logicalType: string
+        physicalType: char(2)
+        logicalTypeOptions:
+          pattern: "^[A-Z]{2}$"
+        quality:
+          - id: country_code_known
+            metric: invalidValues
+            arguments:
+              validValues: [DE, FR, GB, IN, US]
+            mustBeLessOrEqualTo: 1
+            unit: percent
+            dimension: conformity
+      - name: created_at
+        logicalType: timestamp
+        physicalType: timestamp
+        required: true
+        logicalTypeOptions:
+          minimum: "2015-01-01T00:00:00"
+    quality:
+      - id: customers_not_empty
+        metric: rowCount
+        mustBeGreaterThan: 0
+      - id: customer_names_reviewed
+        type: text
+        description: Customer names are reviewed by the data steward every quarter.
+
+  - name: orders
+    physicalName: orders
+    physicalType: table
+    properties:
+      - name: order_id
+        logicalType: integer
+        physicalType: bigint
+        primaryKey: true
+        primaryKeyPosition: 1
+      - name: customer_id
+        logicalType: integer
+        physicalType: integer
+        required: true
+        relationships:
+          - to: customers.customer_id
+      - name: status
+        logicalType: string
+        physicalType: varchar(20)
+        quality:
+          - metric: nullValues
+            mustBe: 0
+          - metric: invalidValues
+            arguments:
+              validValues: [new, paid, shipped, cancelled]
+            mustBe: 0
+      - name: amount
+        logicalType: number
+        physicalType: decimal(12,2)
+        logicalTypeOptions:
+          minimum: 0
+          maximum: 100000
+        quality:
+          - id: amount_mostly_present
+            metric: nullValues
+            mustBeLessThan: 5
+            unit: percent
+      - name: ordered_at
+        logicalType: timestamp
+        physicalType: timestamp
+    quality:
+      - id: no_duplicate_order_lines
+        metric: duplicateValues
+        arguments:
+          properties: [order_id, customer_id]
+        mustBe: 0
+      - id: orders_daily_volume
+        metric: rowCount
+        mustBeBetween: [0, 1000000]
+      - id: no_orders_before_customers
+        type: sql
+        query: |
+          SELECT COUNT(*) FROM {object} o
+          WHERE o.ordered_at < (SELECT MIN(created_at) FROM customers)
+        mustBe: 0
+        severity: warning
+      - id: soda_freshness
+        type: custom
+        engine: soda
+        implementation: |
+          freshness(ordered_at) < 1d

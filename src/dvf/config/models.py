@@ -6,7 +6,7 @@ interpolation, and inheritance, so every table carries its effective settings.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -362,6 +362,69 @@ class ColumnsConfig(StrictModel):
         return self
 
 
+WindowBound = datetime | date | int | float | str
+
+
+class WindowConfig(StrictModel):
+    """Compare only rows inside a watermark window, for delta and incremental loads (MIG-02).
+
+    Each side keeps the rows with ``start <= column < end`` (``end_inclusive`` makes the end
+    inclusive). Bounds may use ``${run.*}`` and ``${var:*}``; ISO dates and timestamps become
+    date and timestamp literals (offsets are converted to UTC), and numbers stay numbers, so
+    integer watermarks such as change sequence numbers work too.
+    """
+
+    column: str | None = None
+    """Watermark column on both sides."""
+    source_column: str | None = None
+    """Watermark column on the source, if it differs from ``column``."""
+    target_column: str | None = None
+    """Watermark column on the target; defaults to ``column``, then ``source_column``."""
+    start: WindowBound | None = None
+    """Inclusive lower bound."""
+    end: WindowBound | None = None
+    """Upper bound, exclusive unless ``end_inclusive`` is true."""
+    end_inclusive: bool = False
+
+    @model_validator(mode="after")
+    def _shape(self) -> WindowConfig:
+        if self.start is None and self.end is None:
+            raise ValueError("set 'start', 'end', or both")
+        if self.column is None and self.source_column is None and self.target_column is None:
+            raise ValueError("set 'column' (or 'source_column' and 'target_column')")
+        return self
+
+
+class InFlightConfig(StrictModel):
+    """Exclude rows that changed shortly before a cutoff, so data still moving through live
+    replication does not show as mismatches (MIG-09). Combine it with ``as_of`` time travel on
+    sources that support it."""
+
+    column: str | None = None
+    """Change timestamp column on both sides."""
+    source_column: str | None = None
+    """Change timestamp column on the source, if it differs from ``column``."""
+    target_column: str | None = None
+    """Change timestamp column on the target; defaults to ``column``, then ``source_column``."""
+    window: Duration
+    """Rows changed within this long before the cutoff, or after it, are excluded (``15m``)."""
+    cutoff: datetime | str | None = None
+    """The cutoff instant: an ISO timestamp, ``${run.*}``, or ``${var:*}``. Defaults to the
+    run's start. Values without an offset are in ``normalization.timezone``; the column's values
+    are assumed to be in that time zone too."""
+    exclude_keys_on_both_sides: bool = True
+    """Also exclude, on the other side, the keys of rows excluded on either side, so a row that
+    changed on one side only is not reported as missing or different (needs keys)."""
+    max_keys: PositiveInt = Field(default=10_000, le=1_000_000)
+    """Most in-flight keys excluded on both sides; more is an error (narrow the window)."""
+
+    @model_validator(mode="after")
+    def _shape(self) -> InFlightConfig:
+        if self.column is None and self.source_column is None and self.target_column is None:
+            raise ValueError("set 'column' (or 'source_column' and 'target_column')")
+        return self
+
+
 def _keys_auto(value: Any) -> Any:
     return [] if value == "auto" else value
 
@@ -392,6 +455,10 @@ class TableConfig(StrictModel):
     schema_checks: list[SchemaCheck] = Field(default_factory=lambda: list(_DEFAULT_SCHEMA_CHECKS))
     checks: list[SerializeAsAny[CheckConfig]] = Field(default_factory=list)
     details: dict[str, Any] = Field(default_factory=dict)
+    window: WindowConfig | None = None
+    """Validate only rows inside a watermark window (delta and incremental loads, MIG-02)."""
+    in_flight: InFlightConfig | None = None
+    """Exclude rows changed shortly before a cutoff (live replication, MIG-09)."""
 
     @model_validator(mode="before")
     @classmethod

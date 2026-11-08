@@ -33,9 +33,16 @@ from typing import Any
 
 from dvf import __version__
 from dvf.checks.context import CheckContext, CheckOutcome
+from dvf.checks.pair import ROW_FILTERS_STATE, CheckEnvironment, EnvironmentAware, PairContext
 from dvf.checks.schema import SchemaInputs, run_schema_checks, schema_diff
 from dvf.compare.context import ComparisonContext
-from dvf.compare.plan import ColumnPairing, ComparisonPlan, build_plan, pair_columns
+from dvf.compare.plan import (
+    ColumnPairing,
+    ComparisonPlan,
+    build_plan,
+    normalized_types,
+    pair_columns,
+)
 from dvf.config.base import NormalizerRef
 from dvf.config.checks import CheckConfig
 from dvf.config.loader import LoadedConfig
@@ -64,7 +71,7 @@ from dvf.models.results import (
     make_check_id,
 )
 from dvf.observability.logging import log_context
-from dvf.plugins.base import Check, Comparator, Connector, Normalizer, Relation
+from dvf.plugins.base import Check, Comparator, Connector, Normalizer, PairCheck, Relation
 from dvf.plugins.registry import PluginKind, Registry
 from dvf.reporting.base import ReportOptions, ReportSection, render_reports
 from dvf.security.masking import Privacy
@@ -484,6 +491,29 @@ class Runner:
             state.target_exists = state.target_conn.exists(state.target_rel)
             if state.target_exists:
                 state.target_schema = state.target_conn.get_schema(state.target_rel)
+        if table.window is not None or table.in_flight is not None:
+            self._apply_row_filters(state)
+
+    def _apply_row_filters(self, state: _TableState) -> None:
+        """Restrict both datasets to the table's window and in-flight exclusion (MIG-02, MIG-09)."""
+        from dvf.packs.migration.windows import apply_row_filters
+
+        for side in (Side.SOURCE, Side.TARGET):
+            target = side is Side.TARGET
+            conn = state.target_conn if target else state.source_conn
+            rel = state.target_rel if target else state.source_rel
+            schema = state.target_schema if target else state.source_schema
+            if conn is None or rel is None or schema is None:
+                continue
+            rel, filters = apply_row_filters(
+                state.table, side, rel, schema, conn.sql_dialect, self.info
+            )
+            state.row_filters[side.value] = filters
+            state.dataset.details.setdefault("row_filters", {})[side.value] = filters.predicates
+            if target:
+                state.target_rel = rel
+            else:
+                state.source_rel = rel
 
     def _source_exists(self, state: _TableState) -> None:
         """Single-dataset suites still report a missing dataset."""
@@ -537,13 +567,16 @@ class Runner:
             target_pk=state.target_schema.primary_key if state.target_schema else (),
             key_columns=[(k.source, k.target_name) for k in keys],
             probe_target_uniqueness=self._uniqueness_probe(state),
+            normalized_types=self._normalized_types(pairing),
         )
         if table.schema_checks:
             for outcome in run_schema_checks(list(table.schema_checks), inputs):
                 self._record(
                     state, outcome, outcome.type or "schema", Dimension.SCHEMA, _const(outcome)
                 )
-        if not (table.comparison.enabled and pairing is not None):
+        # Pair checks (migration validations) need the comparison inputs even when no comparison
+        # strategy runs.
+        if pairing is None or not (table.comparison.enabled or self._has_pair_checks(table)):
             return
         assert state.source_conn and state.target_conn and state.source_rel and state.target_rel
         assert state.source_schema is not None and state.target_schema is not None
@@ -592,6 +625,25 @@ class Runner:
             resources=self.resources,
             checkpoints=self.checkpoints.partitions(state.key),
         )
+        if state.row_filters:
+            ctx.state[ROW_FILTERS_STATE] = {
+                side: filters.predicates for side, filters in state.row_filters.items()
+            }
+        if table.in_flight is not None and table.in_flight.exclude_keys_on_both_sides:
+            from dvf.packs.migration.windows import exclude_in_flight_keys
+
+            try:
+                excluded = exclude_in_flight_keys(ctx, state.row_filters, table.in_flight)
+            except Exception as exc:
+                log.debug("in-flight keys of %s could not be excluded", table.label, exc_info=True)
+                state.checks.append(
+                    self._error_result(state, "in_flight", exc, Dimension.RECONCILIATION)
+                )
+                return
+            state.dataset.details["in_flight_keys_excluded"] = excluded
+        state.comparison = ctx
+        if not table.comparison.enabled:
+            return
         strategies = list(table.comparison.strategies)
         any_failed = False
         for strategy in strategies:
@@ -599,6 +651,21 @@ class Runner:
         escalation = table.comparison.on_mismatch
         if escalation and escalation not in strategies and any_failed:
             self._compare(state, ctx, escalation)
+
+    def _normalized_types(
+        self, pairing: ColumnPairing | None
+    ) -> dict[str, tuple[CanonicalType, CanonicalType]]:
+        if pairing is None:
+            return {}
+        found: dict[str, tuple[CanonicalType, CanonicalType]] = {}
+        for pair in pairing.pairs:
+            try:
+                types = normalized_types(pair, self._normalizer)
+            except DvfError:  # an unknown normalizer is reported by the comparison plan
+                continue
+            if types is not None:
+                found[pair.target.name] = types
+        return found
 
     def _source_expr_types(
         self, state: _TableState, pairing: ColumnPairing
@@ -679,10 +746,44 @@ class Runner:
             )
         return failed
 
+    def _is_pair_check(self, config: CheckConfig) -> bool:
+        entry = self.registry.find(PluginKind.CHECK, config.type)
+        implementation = entry.implementation if entry is not None else None
+        return isinstance(implementation, type) and issubclass(implementation, PairCheck)
+
+    def _has_pair_checks(self, table: TableConfig) -> bool:
+        return any(c.enabled and self._is_pair_check(c) for c in table.checks)
+
+    def _check_environment(
+        self, state: _TableState, config: CheckConfig, name: str | None
+    ) -> CheckEnvironment:
+        history = self.config.history
+        return CheckEnvironment(
+            suite=state.suite,
+            table=state.table,
+            check_id=make_check_id(
+                state.suite.name,
+                state.table.label,
+                config.type,
+                columns=config.target_columns(),
+                name=name,
+            ),
+            project=self.config.project.name,
+            base_dir=self.loaded.base_dir,
+            state_dir=self.state_dir,
+            run=self.info,
+            history_store=history.store if history.enabled and self.options.history else None,
+            baseline_policy=self.options.baseline or history.baseline,
+            resources=self.resources,
+        )
+
     def _quality_checks(self, state: _TableState) -> None:
         suite, table = state.suite, state.table
         for config in table.checks:
             if not config.enabled:
+                continue
+            if self._is_pair_check(config):
+                self._pair_check(state, config)
                 continue
             sides = self._sides(suite, config)
             for side in sides:
@@ -736,7 +837,10 @@ class Runner:
                 return CheckOutcome(
                     status=Status.SKIPPED, message=f"there is no {side.value} dataset"
                 )
-            if not exists:
+            # File checks (file_exists, file_count, ...) set requires_dataset = False, so they can
+            # report that nothing has arrived.
+            needs_rows = getattr(entry.implementation if entry else None, "requires_dataset", True)
+            if not exists and needs_rows:
                 return CheckOutcome(
                     status=Status.SKIPPED, message=f"the {side.value} dataset does not exist"
                 )
@@ -749,6 +853,8 @@ class Runner:
             check = implementation(config)
             if not isinstance(check, Check):
                 raise PlanError(f"Check '{config.type}' does not subclass dvf.plugins.Check.")
+            if isinstance(check, EnvironmentAware):
+                check.environment = self._check_environment(state, config, name)
             ctx = CheckContext(
                 config=config,
                 side=side,
@@ -793,6 +899,90 @@ class Runner:
             config=config,
             side=side,
             name=name,
+        )
+
+    def _pair_check(self, state: _TableState, config: CheckConfig) -> None:
+        """Run a check that needs both datasets (a PairCheck) once for the table."""
+        suite, table = state.suite, state.table
+        entry = self.registry.get(PluginKind.CHECK, config.type)
+        implementation = entry.implementation
+        dimension = getattr(implementation, "dimension", Dimension.CUSTOM)
+
+        def evaluate() -> CheckOutcome:
+            if not suite.is_comparison:
+                return CheckOutcome(
+                    status=Status.SKIPPED,
+                    message=f"check '{config.type}' compares a source and a target dataset, but "
+                    f"suite '{suite.name}' has no target",
+                )
+            for side, exists in (
+                (Side.SOURCE, state.source_exists),
+                (Side.TARGET, state.target_exists),
+            ):
+                if not exists:
+                    return CheckOutcome(
+                        status=Status.SKIPPED, message=f"the {side.value} dataset does not exist"
+                    )
+            comparison = state.comparison
+            if comparison is None:
+                return CheckOutcome(
+                    status=Status.SKIPPED,
+                    message="the comparison inputs are not available; see the table's other results",
+                )
+            check = implementation(config)
+            assert isinstance(check, PairCheck)
+            if check.requires_keys and comparison.plan is None:
+                error = comparison.plan_error
+                return CheckOutcome(
+                    status=Status.SKIPPED,
+                    message=str(error)
+                    if error
+                    else "this check pairs rows by key, but the table has no key columns",
+                    hints=[error.hint]
+                    if error is not None and error.hint
+                    else ["Set 'keys' or 'keys: auto' on the table."],
+                )
+            environment = self._check_environment(state, config, config.name)
+            if isinstance(check, EnvironmentAware):
+                check.environment = environment
+            ctx = PairContext(
+                config=config,
+                comparison=comparison,
+                run=self.info,
+                connectors=self.pool,
+                privacy=comparison.privacy,
+                sample_size=table.sample_size,
+                resources=self.resources,
+                environment=environment,
+            )
+            if self._extracts_enabled():
+                ctx.extract_rows = self.config.reports.extracts.max_rows_per_check
+            try:
+                outcome = check.evaluate_pair(ctx)
+            except NotImplementedError as exc:
+                raise PlanError(
+                    str(exc) or f"Check '{config.type}' is not implemented",
+                    hint="Implement evaluate_pair() on the PairCheck class.",
+                ) from exc
+            finally:
+                state.last_queries = ctx.recorder
+            outcome.queries = outcome.queries or ctx.recorder.records
+            if outcome.timing is None:
+                outcome.timing = TimingBreakdown(
+                    source_query_ms=round(ctx.recorder.source_ms, 3),
+                    target_query_ms=round(ctx.recorder.target_ms, 3),
+                )
+            return outcome
+
+        self._record(
+            state,
+            CheckOutcome(),
+            config.type,
+            dimension,
+            evaluate,
+            config=config,
+            side=Side.BOTH,
+            name=config.name,
         )
 
     # ------------------------------------------------------------------ results
@@ -1110,6 +1300,10 @@ class _TableState:
     pairing: ColumnPairing | None = None
     last_queries: Any = None
     key: str = ""
+    comparison: ComparisonContext | None = None
+    """Both datasets and the plan, shared by comparisons and pair checks."""
+    row_filters: dict[str, Any] = field(default_factory=dict)
+    """Window and in-flight filters per side (``source``, ``target``)."""
 
 
 def _const(outcome: CheckOutcome) -> Callable[[], CheckOutcome]:

@@ -1,0 +1,14 @@
+Source Table,Source Column,Source Expression,Target Table,Target Column,Key,Transformation,Normalizers,Compare,PII,Checks,Notes
+KNA1,KUNNR,,CORE.CUSTOMER,CUSTOMER_ID,Y,Strip leading zeros,sap_alpha,,,not_null; unique,Customer number
+KNA1,NAME1,,CORE.CUSTOMER,CUSTOMER_NAME,,Trim trailing blanks,rtrim,,Y,not_blank; length:1..35,
+KNA1,LAND1,,CORE.CUSTOMER,COUNTRY_CODE,,Direct,,,,allowed_values:DE|FR|GB|IN|US,
+KNA1,ERDAT,,CORE.CUSTOMER,CREATED_DATE,,YYYYMMDD to DATE,sap_dats,,,,
+KNA1,,TRIM(STRAS) || ' ' || TRIM(ORT01),CORE.CUSTOMER,FULL_ADDRESS,,Street and city,,,Y,,
+KNA1,STCEG,,CORE.CUSTOMER,VAT_ID,,Direct,,,,"regex:^[A-Z]{2}[0-9A-Z]{2,12}$",
+KNA1,MANDT,,CORE.CUSTOMER,,,Client is not migrated,,,,,
+,,,CORE.CUSTOMER,LOAD_TS,,Set by the load job,,N,,,Audit column
+VBAK,VBELN,,CORE.SALES_ORDER,ORDER_ID,Y,,sap_alpha,,,not_null; unique,
+VBAK,KUNNR,,CORE.SALES_ORDER,CUSTOMER_ID,,Direct,sap_alpha,,,not_null,Joins CORE.CUSTOMER
+VBAK,NETWR,,CORE.SALES_ORDER,NET_VALUE,,Direct,round(2),,,range:0..,Net value in document currency
+VBAK,WAERK,,CORE.SALES_ORDER,CURRENCY,,Direct,,,,allowed_values:EUR|GBP|INR|USD,
+VBAK,ERDAT,,CORE.SALES_ORDER,ORDER_DATE,,YYYYMMDD to DATE,sap_dats,,,,

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     import pyarrow as pa
 
     from dvf.checks.context import CheckContext, CheckOutcome
+    from dvf.checks.pair import PairContext
     from dvf.compare.context import ComparisonContext
     from dvf.config.checks import CheckConfig
     from dvf.config.connections import ConnectionConfig
@@ -85,6 +86,32 @@ class RowCheck(Check):
         return ctx.evaluate_predicate(
             self.predicate(ctx), columns=columns, null_passes=self.null_passes
         )
+
+
+class PairCheck(Check):
+    """A check that needs both datasets of a comparison table, usually paired by key.
+
+    Implement :meth:`evaluate_pair`. It receives a :class:`~dvf.checks.pair.PairContext` holding
+    both sides' connectors, relations, and schemas, the comparison plan (canonical keys), and
+    helpers that bring selected keys and columns of both sides together (in a local DuckDB, or in
+    the database when both sides share a connection) so the rule can be written as SQL. Pair
+    checks run once per table (``side`` is ignored) and are skipped in single-dataset suites.
+    """
+
+    requires_keys: ClassVar[bool] = False
+    """Whether the check pairs rows by key (it is then skipped when the table has no keys)."""
+
+    def evaluate(self, ctx: CheckContext) -> CheckOutcome:
+        from dvf.core.errors import PlanError
+
+        raise PlanError(
+            f"Check '{self.plugin_name or type(self).__name__}' compares the source and target "
+            "datasets, so it needs a comparison suite (one with a target connection)."
+        )
+
+    def evaluate_pair(self, ctx: PairContext) -> CheckOutcome:  # pragma: no cover - interface
+        """Run the check against both datasets in ``ctx`` and return its outcome."""
+        raise NotImplementedError(f"{type(self).__name__} does not implement evaluate_pair()")
 
 
 # ====================================================================== connectors
@@ -304,6 +331,27 @@ class Normalizer(Component):
         """Whether this normalizer changes columns of ``ctype`` (others pass through unchanged)."""
         return True
 
+    def for_side(self, side: str) -> Normalizer | None:
+        """This normalizer as used on ``side`` (``source`` or ``target``) of a comparison, or
+        ``None`` to leave that side unchanged.
+
+        The default returns ``self``: a normalizer applies on both sides, wherever
+        :meth:`applies_to` accepts the column's type. Override it when the behavior depends on
+        the side (``sap_curr`` shifts only the side that stores SAP-internal amounts, and reads
+        the currency from a differently named column on each side). Return a copy instead of
+        changing ``self``: one instance is shared by both sides and by worker threads.
+        """
+        return self
+
+    def input_columns(self) -> tuple[str, ...]:
+        """Other columns of the same row that this normalizer reads, by name (default: none).
+
+        SQL implementations reference them with ``dialect.quote(name)``. The Polars engine
+        fetches them along with the normalized column; :meth:`to_polars` reads them with
+        :func:`polars_input`.
+        """
+        return ()
+
     def output_type(self, ctype: CanonicalType) -> CanonicalType:
         """The column type after normalization."""
         return ctype
@@ -320,6 +368,18 @@ class Normalizer(Component):
 
     def to_python(self, value: Any, ctype: CanonicalType) -> Any:  # pragma: no cover
         raise NotImplementedError
+
+
+INPUT_COLUMN_PREFIX = "dvf_input__"
+"""Prefix of the frame columns that hold a normalizer's :meth:`Normalizer.input_columns`."""
+
+
+def polars_input(name: str) -> pl.Expr:
+    """The Polars expression for column ``name`` of the same row, read by a normalizer that lists
+    it in :meth:`Normalizer.input_columns`."""
+    import polars as pl
+
+    return pl.col(INPUT_COLUMN_PREFIX + name)
 
 
 # ====================================================================== reporters and others

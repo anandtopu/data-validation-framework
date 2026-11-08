@@ -4,8 +4,8 @@
 
 `dvf` validates schemas and data quality, reconciles source and target datasets at scale, and produces detailed, auditable reports. It targets migration projects (SAP, on-premise databases to cloud warehouses, SQL to NoSQL) and data engineering pipelines (PySpark, Databricks, Parquet, Avro, JSON, CSV).
 
-!!! warning "Pre-alpha: Phase 2"
-    dvf validates and compares data in local files and databases (DuckDB, SQLite, PostgreSQL, SQL Server, Oracle, MySQL, plus beta Snowflake, BigQuery, Redshift, and Databricks connectors), scales to large tables with bucketed checksums and parallel execution, and explains every failure. Spark, SAP, and NoSQL arrive in Phase 3.
+!!! warning "Pre-alpha: Phase 3"
+    dvf validates and compares data in files and lakehouse tables (Parquet, CSV, JSON, ORC, Avro, Excel, fixed width, XML, Delta Lake, Iceberg), databases (DuckDB, SQLite, PostgreSQL, SQL Server, Oracle, MySQL), MongoDB, and Spark, plus beta Snowflake, BigQuery, Redshift, Databricks, Cassandra, DynamoDB, Cosmos DB, SAP HANA, and SAP RFC connectors. It scales to large tables with bucketed checksums and parallel execution, explains every failure, covers the migration checklist (MIG-01 to MIG-14), and validates DataFrames inside pipelines. Docker images, notifications, and the 1.0 release arrive in Phase 4.
 
 ## What works today
 
@@ -18,6 +18,11 @@
 | `dvf connections test <file>` | Open every connection and run a trivial query |
 | `dvf run <file> --resume <run_id>` | Continue an interrupted or killed run from its checkpoints |
 | `dvf explain`, `dvf trace`, `dvf debug`, `dvf rerun`, `dvf history` | See the plan and SQL, follow one record, drill into a run, rerun failures, list runs ([Debugging](debugging.md)) |
+| `dvf discover`, `dvf import-mapping`, `dvf import-contract`, `dvf export-contract` | Generate a configuration from two databases' metadata, a source-to-target mapping sheet, or an ODCS contract ([Discovery](discovery.md)) |
+| `dvf profile`, `dvf suggest` | Column profiles, and candidate checks from them |
+| `dvf baseline capture`, `dvf history compare` | Pre-migration baselines and rehearsal-to-rehearsal comparisons ([Migration validations](migration.md)) |
+| `dvf sap templates` | SAP business object templates ([SAP](sap.md)) |
+| `dvf.validate_dataframe(df, checks)` | Validate a pandas, Polars, Arrow, or Spark DataFrame in a pipeline and quarantine failing rows ([In-pipeline validation](pipelines.md)) |
 | `dvf --version`, `dvf version` | Versions of dvf, its schemas, the plugin API, Python, and the platform |
 | `dvf validate-config <file>` | Load and validate a configuration, with file, line, and column for every problem |
 | `dvf config show <file>` | The fully resolved configuration, with secrets redacted |

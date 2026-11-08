@@ -248,6 +248,18 @@ class OracleDialect(Dialect):
         anchored = self.literal(f"^({pattern})$")
         return f"(REGEXP_INSTR({expr}, {anchored}, 1, 1, 1) = LENGTH({expr}) + 1)"
 
+    def substring(self, expr: str, start: int | str, length: int | str) -> str:
+        return f"SUBSTR({expr}, {start}, {length})"
+
+    def date_from_iso(self, expr: str) -> str:
+        # CAST would depend on NLS_DATE_FORMAT.
+        return f"TO_DATE({expr}, 'YYYY-MM-DD')"
+
+    def time_from_iso(self, expr: str) -> str:
+        """A TIMESTAMP whose time of day is ``expr`` (Oracle has no TIME type; :meth:`time_text`
+        reads only the time of day)."""
+        return f"TO_TIMESTAMP({expr}, 'HH24:MI:SS')"
+
     # ------------------------------------------------------------------ canonical forms
     def integer_text(self, expr: str) -> str:
         return f"TO_CHAR({expr})"

@@ -755,8 +755,12 @@ def test_row_hash_sql_matches_the_reference_when_run(name: str, dialect: Dialect
 def test_case_premapping_matches_the_reference(name: str, dialect: Dialect) -> None:
     samples = ["ΑΣ", "ΟΔΟΣ ΣΑΣ", "İstanbul", "ß", "Straße", "Ab"]
     lowered = _duckdb_rows(dialect.lower("c0"), [(s,) for s in samples], ["c0"])
-    uppered = _duckdb_rows(dialect.upper("c0"), [(s,) for s in samples], ["c0"])
     assert lowered == [simple_lower(s) for s in samples]
+    if name == "databricks":
+        # Its UPPER falls back to TRANSFORM/ARRAY_JOIN, which DuckDB cannot run; the Spark parity
+        # tests run the same SQL on real Spark.
+        return
+    uppered = _duckdb_rows(dialect.upper("c0"), [(s,) for s in samples], ["c0"])
     assert uppered == [simple_upper(s) for s in samples]
     # Engines with full (context-sensitive, multi-character) case mappings, such as Java and
     # ICU, agree with the reference once the special characters are pre-mapped.

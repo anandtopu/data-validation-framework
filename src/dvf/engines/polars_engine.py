@@ -20,6 +20,7 @@ from dvf.engines.base import (
 )
 from dvf.models.results import ReconciliationSummary
 from dvf.normalize.canonical import canonical_polars, numeric_polars, polars_row_hash
+from dvf.plugins.base import INPUT_COLUMN_PREFIX
 
 if TYPE_CHECKING:
     import polars as pl
@@ -43,20 +44,40 @@ class PolarsEngine(Engine):
     name = "polars"
 
     def _raw_sql(
-        self, columns: list[PlannedColumn], side: Literal["source", "target"], rel: str
+        self,
+        columns: list[PlannedColumn],
+        side: Literal["source", "target"],
+        rel: str,
+        inputs: tuple[str, ...] = (),
+        quote: Any = None,
     ) -> str:
         items = []
         for i, col in enumerate(columns):
             expr = col.source if side == "source" else col.target
             items.append(f"{expr.raw} AS v{i}")
+        for j, name in enumerate(inputs):
+            items.append(f"{quote(name)} AS w{j}")
         return "SELECT " + ", ".join(items) + f" FROM {rel}"
+
+    @staticmethod
+    def _inputs(columns: list[PlannedColumn], side: Literal["source", "target"]) -> tuple[str, ...]:
+        """Other columns the side's normalizers read (``Normalizer.input_columns``), in order."""
+        names: dict[str, None] = {}
+        for col in columns:
+            expr = col.source if side == "source" else col.target
+            for normalizer in expr.normalizers:
+                names.update(dict.fromkeys(normalizer.input_columns()))
+        return tuple(names)
 
     def _fetch(
         self, job: DiffJob, side: DiffSide, label: Side, columns: list[PlannedColumn]
     ) -> tuple[pl.DataFrame, float]:
         pl = _import_polars()
         which: Literal["source", "target"] = "source" if label is Side.SOURCE else "target"
-        sql = self._raw_sql(columns, which, side.relation.sql)
+        inputs = self._inputs(columns, which)
+        sql = self._raw_sql(
+            columns, which, side.relation.sql, inputs, side.connector.sql_dialect.quote
+        )
         started = time.perf_counter()
         batches = list(side.connector.iter_batches(sql))
         table = (
@@ -64,7 +85,9 @@ class PolarsEngine(Engine):
             if batches
             else side.connector.query(side.connector.sql_dialect.limit(sql, 0))
         )
-        table = table.rename_columns([f"v{i}" for i in range(len(columns))])
+        table = table.rename_columns(
+            [f"v{i}" for i in range(len(columns))] + [INPUT_COLUMN_PREFIX + n for n in inputs]
+        )
         elapsed = _ms(started)
         job.recorder.add(side.connector, sql, label, elapsed, table.num_rows, engine=self.name)
         frame = pl.from_arrow(table)

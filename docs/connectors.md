@@ -10,7 +10,7 @@ Proprietary drivers are never bundled: install the extra for the systems you use
 
 | Type | Systems | Install | Status | Time travel (`as_of`) |
 |---|---|---|---|---|
-| `files` | CSV, TSV, Parquet, JSON, NDJSON (local, or object storage through DuckDB extensions) | included | ready | no |
+| `files` | CSV, TSV, Parquet, JSON, NDJSON, ORC, Avro, Excel, fixed width, XML, Delta Lake, Iceberg; gz, zst, bz2, xz; Hive-partitioned folders; local, or object storage through fsspec or DuckDB extensions ([details](files.md)) | included (`dvf[delta]`, `dvf[iceberg]`, `dvf[avro]`, `dvf[excel]` for those formats) | ready | Delta (version or timestamp), Iceberg (snapshot or timestamp) |
 | `duckdb` | DuckDB, in memory or on disk | included | ready | no |
 | `sqlite` | SQLite files | included | ready | no |
 | `postgres` | PostgreSQL 13+ and compatible | `dvf[postgres]` | ready | no |
@@ -21,8 +21,17 @@ Proprietary drivers are never bundled: install the extra for the systems you use
 | `bigquery` | Google BigQuery | `dvf[bigquery]` | beta | `FOR SYSTEM_TIME AS OF` |
 | `redshift` | Amazon Redshift | `dvf[redshift]` | beta | no |
 | `databricks` | Databricks SQL warehouses and clusters | `dvf[databricks]` | beta | `TIMESTAMP AS OF` / `VERSION AS OF` (Delta) |
+| `spark` | Apache Spark 4: a running session, local, cluster, or Databricks Connect (unverified); catalog tables, Spark SQL, Parquet, ORC, CSV, JSON (Avro, Delta, Iceberg with their packages); see [Spark](spark.md) | `dvf[spark]` and Java 17 or later | ready | `VERSION AS OF` / `TIMESTAMP AS OF` (Delta, Iceberg) |
+| `mongodb` | MongoDB 4.4+ (verified with 7.0); see [NoSQL](nosql.md) | `dvf[mongodb]` | ready | no |
+| `cassandra` | Apache Cassandra, ScyllaDB, DataStax Astra | `dvf[cassandra]` | beta | no |
+| `dynamodb` | Amazon DynamoDB (run against DynamoDB Local) | `dvf[dynamodb]` | beta | no |
+| `cosmos` | Azure Cosmos DB for NoSQL | `dvf[cosmos]` | beta | no |
+| `sap_hana` | SAP HANA 2.0 and HANA Cloud at database level; see [SAP](sap.md) | install `hdbcli` yourself | beta | no |
+| `sap_rfc` | SAP ECC and S/4HANA through RFC (PyRFC, a custom read module) or OData | PyRFC and the NW RFC SDK yourself; nothing for OData | beta | no |
 
-`pip install 'dvf[all]'` installs every extra.
+`pip install 'dvf[all]'` installs every open-source extra. SAP drivers are never installed by dvf.
+
+NoSQL and SAP RFC datasets are copied once per run into local Parquet files and queried with DuckDB, so every check and comparison works on them; filter them at the source through their dataset `options` ([NoSQL](nosql.md), [SAP](sap.md)). DataFrames passed to `dvf.validate_dataframe` use an in-process `dataframe` connection that cannot be configured in a file ([In-pipeline validation](pipelines.md)).
 
 ## Connecting
 
@@ -71,6 +80,8 @@ dvf compares canonical text built inside each database. Most differences between
 - **Large hash sums**: bucket checksums sum 32-bit integers per bucket. Every supported system holds the sums of about two billion rows per bucket; raise `comparison.buckets` beyond that.
 
 ## Beta connectors
+
+Cassandra, DynamoDB, Cosmos DB, SAP HANA, and SAP RFC are covered on their own pages ([NoSQL](nosql.md), [SAP](sap.md)): they are tested with fake drivers (DynamoDB also against DynamoDB Local), not against the real services.
 
 Snowflake, BigQuery, Redshift, and Databricks SQL are complete, but have only been verified with unit tests: fake drivers, every generated query parsed in its dialect with sqlglot, and some expressions evaluated locally. Their integration tests run against a real account when an environment variable holds a JSON object of connection settings:
 

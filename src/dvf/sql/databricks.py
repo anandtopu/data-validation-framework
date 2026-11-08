@@ -16,14 +16,15 @@ has not been run against a live workspace. Canonical forms follow
   say so (:meth:`DatabricksDialect.supports_unicode_form` is false).
 * Databricks has no ``TIME`` type; time canonicalization parses the value's text.
 
-Known differences from the Python reference: ``lower``/``upper`` use Java's full case mappings;
-dvf pre-maps capital sigma, dotted capital I, and sharp s, but other characters whose upper case
-is several characters (ligatures such as U+FB01) can still differ. ``SUM`` of 32-bit hash
+``UPPER`` applies Java's full case mappings: strings it lengthens are upper-cased one character
+at a time, with multi-character mappings replaced by the reference's single character (verified
+on Apache Spark 4). ``LOWER`` pre-maps capital sigma and dotted capital I. ``SUM`` of 32-bit hash
 integers overflows ``BIGINT`` only beyond about two billion rows in one bucket.
 """
 
 from __future__ import annotations
 
+import functools
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any
@@ -39,6 +40,20 @@ DOTTED_CAPITAL_I = chr(0x0130)
 SHARP_S, CAPITAL_SHARP_S = chr(0x00DF), chr(0x1E9E)
 
 _ESCAPES = {"\\": "\\\\", "'": "\\'", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
+@functools.cache
+def expanding_upper() -> tuple[str, str]:
+    """Characters whose full upper case is several characters, and the single character the
+    per-character reference (:func:`~dvf.normalize.canonical.simple_upper`) maps each one to."""
+    from dvf.normalize.canonical import simple_upper
+
+    chars = [
+        c
+        for c in map(chr, range(0x110000))
+        if not 0xD800 <= ord(c) <= 0xDFFF and len(c.upper()) != 1
+    ]
+    return "".join(chars), "".join(simple_upper(c) for c in chars)
 
 
 class DatabricksDialect(Dialect):
@@ -74,7 +89,16 @@ class DatabricksDialect(Dialect):
         return f"LOWER(REPLACE({sigma}, {self.literal(DOTTED_CAPITAL_I)}, 'i'))"
 
     def upper(self, expr: str) -> str:
-        return f"UPPER(REPLACE({expr}, {self.literal(SHARP_S)}, {self.literal(CAPITAL_SHARP_S)}))"
+        sources, targets = expanding_upper()
+        per_char = (
+            "CASE WHEN LENGTH(UPPER(dvf_ch)) = 1 THEN UPPER(dvf_ch) "
+            f"ELSE TRANSLATE(dvf_ch, {self.literal(sources)}, {self.literal(targets)}) END"
+        )
+        slow = f"ARRAY_JOIN(TRANSFORM(SPLIT({expr}, ''), dvf_ch -> {per_char}), '')"
+        # Common subexpressions are computed once, so the fast path costs one UPPER per value.
+        return (
+            f"(CASE WHEN LENGTH(UPPER({expr})) = LENGTH({expr}) THEN UPPER({expr}) ELSE {slow} END)"
+        )
 
     def trim(self, expr: str, mode: str = "both", chars: str = " ") -> str:
         return f"TRIM({_TRIM_SIDES[mode]} {self.literal(chars)} FROM {expr})"
@@ -120,6 +144,9 @@ class DatabricksDialect(Dialect):
         utc = self.to_utc(expr, tz_aware=tz_aware, timezone=timezone)
         text = f"REPLACE(DATE_FORMAT({utc}, 'yyyy-MM-dd HH:mm:ss.SSSSSS'), ' ', 'T')"
         return f"LEFT({text}, {_TS_WIDTH[precision]})"
+
+    def time_from_iso(self, expr: str) -> str:
+        return expr  # no TIME type: time_text parses the text
 
     def time_text(self, expr: str, *, precision: str) -> str:
         ts = f"CAST(CONCAT('1970-01-01 ', CAST({expr} AS STRING)) AS TIMESTAMP_NTZ)"

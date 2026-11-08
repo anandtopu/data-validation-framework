@@ -9,7 +9,7 @@ import fnmatch
 import os
 import types
 import typing
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -590,11 +590,10 @@ class _Loader:
                 seen_ids: dict[str, int] = {}
                 for k, check in enumerate(table.checks):
                     cp: ValuePath = (*tp, "checks", k)
-                    parent = getattr(check, "parent", None)
-                    if parent is not None:
-                        check_connection(
-                            getattr(parent, "connection", None), (*cp, "parent", "connection")
-                        )
+                    # Datasets a check reads elsewhere (parent tables, change tables, key maps,
+                    # reference files) name their connection in a nested 'connection' field.
+                    for name, ref_path in _nested_connections(check, cp):
+                        check_connection(name, ref_path)
                     if (
                         not suite.is_comparison
                         and check.side is not None
@@ -712,6 +711,22 @@ class _Loader:
     ) -> typing.NoReturn:
         self._add(DiagnosticLevel.ERROR, code, message, path, locations=locations)
         raise ConfigError(message, self.diagnostics)
+
+
+def _nested_connections(model: BaseModel, path: ValuePath) -> Iterator[tuple[str, ValuePath]]:
+    """``connection`` values of models nested in ``model`` (not of ``model`` itself)."""
+    for field_name, info in type(model).model_fields.items():
+        value = getattr(model, field_name, None)
+        key = info.alias or field_name
+        items = list(enumerate(value)) if isinstance(value, list) else [(None, value)]
+        for index, item in items:
+            if not isinstance(item, BaseModel):
+                continue
+            item_path: ValuePath = (*path, key) if index is None else (*path, key, index)
+            connection = getattr(item, "connection", None)
+            if isinstance(connection, str):
+                yield connection, (*item_path, "connection")
+            yield from _nested_connections(item, item_path)
 
 
 def _deduplicate(diagnostics: list[Diagnostic]) -> list[Diagnostic]:

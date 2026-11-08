@@ -235,8 +235,9 @@ def test_file_connector_formats(tmp_path: Path) -> None:
         )
         with pytest.raises(ConnectorError, match="Cannot infer"):
             connector.resolve(DatasetSpec(path="e.unknown"))
-        with pytest.raises(ConnectorError, match="Phase 3"):
+        assert not connector.exists(
             connector.resolve(DatasetSpec(path="x.avro", options={"format": "avro"}))
+        )
         with pytest.raises(ConnectorError, match="as_of"):
             connector.resolve(DatasetSpec(path="a.parquet", as_of="2024-01-01"))
         with pytest.raises(ConnectorError, match="Query failed"):

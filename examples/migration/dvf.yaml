@@ -1,0 +1,74 @@
+# yaml-language-server: $schema=../../schemas/config.schema.json
+#
+# Business parity (MIG-13): the trial balance by company code, fiscal period, and account must
+# match between the legacy general ledger and the new journal, within 0.01.
+#
+# Each side is a query (REC-08). The legacy line items carry a debit/credit indicator (S/H) and
+# zero-padded account numbers; the new journal stores signed amounts with three decimals. The data
+# is synthetic; one company's amounts differ by 0.004 from rounding, inside the tolerance.
+#
+#   cd examples/migration
+#   dvf run dvf.yaml
+#
+# Read paths are relative to the current folder (DuckDB's read_csv); from elsewhere, pass
+# --var data=path/to/examples/migration/data.
+version: 1
+
+project:
+  name: migration-parity-demo
+  description: Trial balance parity between a legacy ledger and the new journal
+  metadata:
+    release: rehearsal-1
+
+vars:
+  data: ./data
+
+defaults:
+  schema_checks: []
+  sample_size: 20
+
+connections:
+  legacy:
+    type: duckdb
+  journal:
+    type: duckdb
+
+suites:
+  - name: finance
+    description: Business parity of the ledger
+    source: legacy
+    target: journal
+    tables:
+      - name: trial_balance
+        source:
+          query: |
+            SELECT bukrs AS company_code,
+                   gjahr || '-' || monat AS period,
+                   hkont AS gl_account,
+                   SUM(CASE WHEN shkzg = 'H' THEN -dmbtr ELSE dmbtr END) AS balance
+            FROM read_csv('${var:data}/legacy_gl_items.csv', header = true,
+                          types = {'bukrs': 'VARCHAR', 'gjahr': 'VARCHAR', 'monat': 'VARCHAR',
+                                   'hkont': 'VARCHAR', 'dmbtr': 'DECIMAL(15,2)'})
+            GROUP BY bukrs, gjahr, monat, hkont
+        target:
+          query: |
+            SELECT company_code, fiscal_period AS period, gl_account, SUM(amount) AS balance
+            FROM read_csv('${var:data}/target_journal_lines.csv', header = true,
+                          types = {'company_code': 'VARCHAR', 'gl_account': 'VARCHAR',
+                                   'amount': 'DECIMAL(15,3)'})
+            GROUP BY company_code, fiscal_period, gl_account
+        keys:
+          - company_code
+          - period
+          - source: gl_account
+            normalize: [strip_leading_zeros]
+        comparison:
+          strategies: [row_count, aggregate, full_diff]
+          on_mismatch: null
+          group_by: [company_code, period]
+          aggregates: [count, sum]
+          tolerance:
+            numeric_abs: 0.01
+
+reports:
+  formats: [json, html, signoff]

@@ -1,0 +1,62 @@
+# dvf SAP template: customer and vendor to Business Partner (CVI) mapping counts.
+#
+# In S/4HANA every customer (KNA1) and vendor (LFA1) must be linked to a Business Partner by
+# Customer/Vendor Integration: CVI_CUST_LINK and CVI_VEND_LINK hold the links. This template
+# compares the customers and vendors of the source (ECC, or the same system before conversion)
+# with the links of the target: counts must agree, and the key comparison lists customers and
+# vendors without a Business Partner (missing in target) and links without a customer or vendor
+# (extra in target). A check on the target also reports links whose Business Partner is missing
+# from BUT000.
+#
+# Use it with `extends:` (copy it with `dvf sap copy-template cvi_business_partner`) and set:
+#
+#   vars:
+#     sap_connection: ecc_hana     # connection holding KNA1 and LFA1
+#     target_connection: s4_hana   # connection holding CVI_CUST_LINK, CVI_VEND_LINK, BUT000
+#
+# Both may name the same connection. Customer and vendor numbers go through sap_alpha, so
+# ALPHA-padded and stripped numbers compare equal.
+version: 1
+suites:
+  - name: sap_cvi_business_partner
+    description: Customer and vendor to Business Partner (CVI) links
+    source: ${var:sap_connection}
+    target: ${var:target_connection}
+    tags: [sap, master-data, business-partner, cvi]
+    tables:
+      - name: customers_to_bp
+        description: Every customer has a Business Partner link (CVI_CUST_LINK)
+        source: { table: KNA1 }
+        target: { table: CVI_CUST_LINK }
+        keys:
+          - { source: KUNNR, target: CUSTOMER, normalize: [sap_alpha] }
+        columns: { include: [] }
+        schema_checks: []
+        comparison:
+          strategies: [row_count, full_diff]
+          on_mismatch: null
+        checks:
+          - type: custom_sql
+            name: customer_links_without_bp
+            side: target
+            sql: >-
+              SELECT l.CUSTOMER, l.PARTNER_GUID FROM {table} l
+              WHERE NOT EXISTS (SELECT 1 FROM BUT000 b WHERE b.PARTNER_GUID = l.PARTNER_GUID)
+      - name: vendors_to_bp
+        description: Every vendor has a Business Partner link (CVI_VEND_LINK)
+        source: { table: LFA1 }
+        target: { table: CVI_VEND_LINK }
+        keys:
+          - { source: LIFNR, target: VENDOR, normalize: [sap_alpha] }
+        columns: { include: [] }
+        schema_checks: []
+        comparison:
+          strategies: [row_count, full_diff]
+          on_mismatch: null
+        checks:
+          - type: custom_sql
+            name: vendor_links_without_bp
+            side: target
+            sql: >-
+              SELECT l.VENDOR, l.PARTNER_GUID FROM {table} l
+              WHERE NOT EXISTS (SELECT 1 FROM BUT000 b WHERE b.PARTNER_GUID = l.PARTNER_GUID)

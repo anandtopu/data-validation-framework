@@ -20,7 +20,7 @@ from dvf.diagnose.planning import PreparedTable, find_tasks, prepare
 from dvf.engines.base import DiffSide, projection_sql
 from dvf.execution.runner import Runner
 from dvf.models.results import make_check_id
-from dvf.plugins.base import RowCheck
+from dvf.plugins.base import PairCheck, RowCheck
 from dvf.plugins.registry import PluginKind
 from dvf.security.masking import Privacy
 
@@ -137,6 +137,8 @@ def _comparison_queries(runner: Runner, prepared: PreparedTable, out: ExplainedT
                 ),
             ),
         ]
+    if "nested" in strategies:
+        _nested_queries(ctx, out)
     if plan is None or not plan.keys or not any(s in ROW_LEVEL for s in strategies):
         return
     config = table.comparison.partitions
@@ -188,6 +190,26 @@ def _comparison_queries(runner: Runner, prepared: PreparedTable, out: ExplainedT
                         f"SELECT MIN({value}) AS lo, MAX({value}) AS hi FROM {rel}",
                     )
                 )
+
+
+def _nested_queries(ctx: ComparisonContext, out: ExplainedTable) -> None:
+    """The per-parent summary query of the ``nested`` strategy, on each side."""
+    from dvf.packs.nosql.nested import _layout
+
+    try:
+        layout = _layout(ctx)
+    except DvfError as exc:
+        out.problems.append(f"nested: {exc}")
+        return
+    for side, diff_side in (("source", ctx.source), ("target", ctx.target)):
+        out.queries.append(
+            PlannedQuery(
+                "nested: child counts, totals, and child-row hashes per parent key",
+                side,
+                diff_side.connector.sql_dialect.name,
+                layout.side_sql(side, diff_side.relation.sql, diff_side.connector.sql_dialect),  # type: ignore[arg-type]
+            )
+        )
 
 
 def _check_sql(runner: Runner, prepared: PreparedTable, config: Any, side: Side) -> str | None:
@@ -273,7 +295,14 @@ def explain(runner: Runner, *, table: str | None = None, suite: str | None = Non
             for check in task.table.checks:
                 if not check.enabled:
                     continue
-                for side in runner._sides(task.suite, check):
+                entry = runner.registry.find(PluginKind.CHECK, check.type)
+                pair_check = bool(
+                    entry
+                    and isinstance(entry.implementation, type)
+                    and issubclass(entry.implementation, PairCheck)
+                )
+                sides = [Side.BOTH] if pair_check else runner._sides(task.suite, check)
+                for side in sides:
                     check_id = make_check_id(
                         task.suite.name,
                         task.table.label,
@@ -282,7 +311,7 @@ def explain(runner: Runner, *, table: str | None = None, suite: str | None = Non
                         name=check.name,
                     )
                     try:
-                        sql = _check_sql(runner, prepared, check, side)
+                        sql = None if pair_check else _check_sql(runner, prepared, check, side)
                     except DvfError as exc:
                         sql = None
                         out.problems.append(f"{check_id}: {exc}")

@@ -19,6 +19,7 @@ Everything in dvf is a component in one registry, including the built-ins. The d
 | `engine` | `dvf.engines` | none |
 | `sink` | `dvf.sinks` | none |
 | lifecycle hooks | `dvf.hooks` | not applicable |
+| SAP RFC backends | `dvf.sap_rfc_backends` | not applicable (a `SapRfcBackend` subclass; see [SAP](sap.md)) |
 
 Names are lowercase and may be namespaced with dots. Use your organization as the namespace (`acme.vat_number_valid`) so names never collide with future built-ins.
 
@@ -77,7 +78,9 @@ The `CheckContext` helpers produce SQL for the dataset's dialect, so one check r
 
 For anything else, subclass `Check` and implement `evaluate(ctx)`, returning a `CheckOutcome` (`passed`, `message`, `observed`, `expected`, `unexpected_count`, `total_count`, `samples`, `details`). dvf adds the check ID, severity, timing, queries, and hooks.
 
-Other component kinds follow the same pattern: subclass `Connector`, `Comparator`, `Normalizer` (SQL, Polars, and Python implementations that must agree), or `Reporter` (render a `RunResult` into files) from `dvf.plugins`.
+A check that needs both datasets of a comparison table, paired by key, subclasses `PairCheck` and implements `evaluate_pair(ctx)`. Its `PairContext` holds both sides' connectors, relations, schemas, and the comparison plan, plus helpers that bring selected keys and columns of both sides together (inside the database when both sides share a connection, otherwise in a local DuckDB that spills to disk), so the rule is written as SQL. Pair checks run once per table and are skipped in suites without a target. The migration checks in [Migration validations](migration.md) are examples.
+
+Other component kinds follow the same pattern: subclass `Connector`, `Comparator`, `Normalizer` (SQL, Polars, and Python implementations that must agree), or `Reporter` (render a `RunResult` into files) from `dvf.plugins`. A normalizer that reads another column of the row (as `sap_curr` reads the currency) declares it with `input_columns()`, and `for_side(side)` can restrict a normalizer to one side. For a system without SQL, subclass `StagedConnector` (`dvf.connectors.staged`): implement `fetch()` to return Arrow batches, and dvf stages them in Parquet and queries them with DuckDB.
 
 ## A distributable plugin package
 
