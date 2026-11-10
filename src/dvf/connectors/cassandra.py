@@ -7,7 +7,7 @@ user-defined types are flattened like documents; top-level columns keep their CQ
 schema checks.
 
 Beta: verified with a fake driver, not yet against a live cluster. Install the driver with
-``pip install 'dvf[cassandra]'``.
+``pip install 'dvf-framework[cassandra]'``.
 """
 
 from __future__ import annotations
@@ -51,10 +51,13 @@ class CassandraConnection(ConnectionConfig):
     contact_points: list[str] = Field(default_factory=lambda: ["127.0.0.1"], min_length=1)
     """Hosts to connect to first."""
     port: int = Field(default=9042, ge=1, le=65535)
+    """CQL native protocol port of the contact points; not used with ``secure_connect_bundle``."""
     keyspace: str | None = None
     """Keyspace for table names without one."""
     username: str | None = None
+    """User name for plain-text authentication."""
     password: SecretStr | None = None
+    """Password of ``username``. Use a ``${secret:...}`` reference; it is treated as a secret."""
     local_datacenter: str | None = None
     """Data center whose nodes serve reads (``DCAwareRoundRobinPolicy``)."""
     consistency_level: ConsistencyName = "LOCAL_QUORUM"
@@ -65,7 +68,9 @@ class CassandraConnection(ConnectionConfig):
     ssl: bool = False
     """Use TLS with the system's default certificate store."""
     protocol_version: int | None = Field(default=None, ge=3, le=6)
+    """Native protocol version, from 3 to 6; the driver negotiates one when omitted."""
     connect_timeout_s: PositiveInt = 10
+    """Seconds to wait for a connection to a node."""
     fetch_size: PositiveInt = Field(default=1000, le=100_000)
     """Rows per page; datasets may override it with ``options.batch_size``."""
 

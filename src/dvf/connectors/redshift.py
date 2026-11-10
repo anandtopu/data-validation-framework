@@ -1,4 +1,4 @@
-"""Amazon Redshift connector (beta; install with ``pip install 'dvf[redshift]'``).
+"""Amazon Redshift connector (beta; install with ``pip install 'dvf-framework[redshift]'``).
 
 Implemented from the redshift_connector and Amazon Redshift documentation and tested against a
 fake driver; it has not been verified against a live cluster or workgroup.

@@ -34,7 +34,7 @@ from typing import Any
 from dvf import __version__
 from dvf.checks.context import CheckContext, CheckOutcome
 from dvf.checks.pair import ROW_FILTERS_STATE, CheckEnvironment, EnvironmentAware, PairContext
-from dvf.checks.schema import SchemaInputs, run_schema_checks, schema_diff
+from dvf.checks.schema import SchemaInputs, run_schema_checks, schema_diff, snapshot_path
 from dvf.compare.context import ComparisonContext
 from dvf.compare.plan import (
     ColumnPairing,
@@ -74,8 +74,8 @@ from dvf.observability.logging import log_context
 from dvf.plugins.base import Check, Comparator, Connector, Normalizer, PairCheck, Relation
 from dvf.plugins.registry import PluginKind, Registry
 from dvf.reporting.base import ReportOptions, ReportSection, render_reports
-from dvf.security.masking import Privacy
-from dvf.security.redaction import global_redactor
+from dvf.security.masking import Privacy, strict_check_result
+from dvf.security.redaction import global_redactor, redact_args
 
 log = logging.getLogger(__name__)
 
@@ -116,6 +116,8 @@ class RunOutput:
     result: RunResult
     output_dir: Path | None
     artifacts: list[ArtifactRef] = field(default_factory=list)
+    notifications: list[Any] = field(default_factory=list)
+    """Notification deliveries (:class:`dvf.packs.integrations.dispatch.Delivery`)."""
 
 
 @dataclass
@@ -131,6 +133,12 @@ class RunPlan:
     """The tables a run will validate. ``modify_plan`` hooks may remove or reorder tasks."""
 
     tasks: list[TableTask]
+
+
+def _check_sample_size(config: CheckConfig | None, table_size: int) -> int:
+    """A check's own ``sample_size`` (``0`` disables its samples), else the table's."""
+    own = getattr(config, "sample_size", None)
+    return table_size if own is None else int(own)
 
 
 def _ms(started: float) -> float:
@@ -202,6 +210,10 @@ class Runner:
         self.output_dir: Path | None = None
         self._normalizers: dict[str, Normalizer] = {}
         self._normalizer_lock = threading.Lock()
+        from dvf.packs.integrations.runtime import RunIntegrations
+
+        self.integrations = RunIntegrations(self.config, self.registry, loaded.base_dir, self.info)
+        """Notifications, OpenLineage, OpenTelemetry, and triage (each off unless configured)."""
 
     def _path(self, value: str) -> Path:
         path = Path(value)
@@ -215,7 +227,7 @@ class Runner:
     # ------------------------------------------------------------------ entry point
     def run(self) -> RunOutput:
         started = time.perf_counter()
-        with log_context(run_id=self.info.run_id):
+        with log_context(run_id=self.info.run_id), self.integrations.run_scope():
             return self._run(started)
 
     def _workers(self, tasks: int) -> int:
@@ -241,6 +253,7 @@ class Runner:
         for task in tasks:
             if task.suite.name not in suite_started:
                 self._hook("on_suite_start", run_id=self.info.run_id, suite=task.suite)
+                self.integrations.suite_started(task.suite.name)
                 suite_started[task.suite.name] = time.perf_counter()
         pending: list[tuple[int, TableTask, str]] = []
         resumed = False
@@ -285,6 +298,7 @@ class Runner:
             suite.status = aggregate_status(d.status for d in suite.datasets)
             suite.duration_ms = _ms(suite_started[name])
             self._hook("on_suite_end", run_id=self.info.run_id, result=suite)
+            self.integrations.suite_finished(suite)
         result = self._assemble(list(suites.values()), started)
         result.interrupted = interrupted
         result.resumed_from_checkpoint = resumed
@@ -293,6 +307,7 @@ class Runner:
         if history is not None:
             self._compare_history(history, result)
         self._hook("on_run_end", result=result)
+        self.integrations.before_reports(result)
         results_path = self.checkpoints.finish(result, self.output_dir)
         output_dir: Path | None = None
         artifacts: list[ArtifactRef] = []
@@ -304,7 +319,10 @@ class Runner:
         if history is not None:
             self._record_history(history, result, results_path)
         self._write_sinks(result)
-        return RunOutput(result=result, output_dir=output_dir, artifacts=artifacts)
+        notifications = self.integrations.run_finished(result, output_dir, artifacts)
+        return RunOutput(
+            result=result, output_dir=output_dir, artifacts=artifacts, notifications=notifications
+        )
 
     def _run_parallel(
         self,
@@ -339,9 +357,11 @@ class Runner:
         """Run one table with its own connection sessions, then checkpoint it."""
         with (
             log_context(run_id=self.info.run_id, suite=task.suite.name, table=task.table.label),
+            self.integrations.table_scope(task.suite.name, task.table.label) as integration,
             self.pool.lease(self._connections_for(task)),
         ):
             dataset = self._run_table(task.suite, task.table, key)
+            integration.finished(dataset)
         self.checkpoints.save_table(key, dataset)
         return dataset
 
@@ -568,9 +588,33 @@ class Runner:
             key_columns=[(k.source, k.target_name) for k in keys],
             probe_target_uniqueness=self._uniqueness_probe(state),
             normalized_types=self._normalized_types(pairing),
+            source_connector=state.source_conn,
+            target_connector=state.target_conn,
+            source_relation=state.source_rel,
+            target_relation=state.target_rel,
+            options=table.schema_options,
+            snapshot_path=snapshot_path(self.state_dir, suite.name, table.label),
+            base_dir=self.loaded.base_dir,
+            suite_name=suite.name,
+            table_name=table.label,
+            run_id=self.info.run_id,
         )
-        if table.schema_checks:
-            for outcome in run_schema_checks(list(table.schema_checks), inputs):
+        selected_schema_checks = list(table.schema_checks)
+        if SchemaCheck.SCHEMA_DRIFT in selected_schema_checks:
+            # The drift check saves this run's schema as the next baseline, so it runs only when
+            # it will be reported (--only and rerun selectors).
+            drift_id = make_check_id(suite.name, table.label, "schema.schema_drift")
+            if not self.options.selectors.check_selected(
+                suite.name,
+                table.label,
+                "schema.schema_drift",
+                drift_id,
+                [*suite.tags, *table.tags],
+                table.severity,
+            ):
+                selected_schema_checks.remove(SchemaCheck.SCHEMA_DRIFT)
+        if selected_schema_checks:
+            for outcome in run_schema_checks(selected_schema_checks, inputs):
                 self._record(
                     state, outcome, outcome.type or "schema", Dimension.SCHEMA, _const(outcome)
                 )
@@ -715,7 +759,7 @@ class Runner:
             if not entry.ready:
                 raise PlanError(
                     f"Comparison strategy '{strategy}' is declared but not implemented in this version.",
-                    hint="Ready strategies: row_count, aggregate, profile, row_hash, full_diff.",
+                    hint="Run 'dvf plugins list --kind comparator' for the ready strategies.",
                 )
             comparator = entry.implementation()
             assert isinstance(comparator, Comparator)
@@ -861,7 +905,7 @@ class Runner:
                 connector=conn,
                 relation=rel,
                 schema=schema,
-                sample_size=table.sample_size,
+                sample_size=_check_sample_size(config, table.sample_size),
                 key_columns=keys,
                 run=self.info,
                 connectors=self.pool,
@@ -951,7 +995,7 @@ class Runner:
                 run=self.info,
                 connectors=self.pool,
                 privacy=comparison.privacy,
-                sample_size=table.sample_size,
+                sample_size=_check_sample_size(config, table.sample_size),
                 resources=self.resources,
                 environment=environment,
             )
@@ -1057,6 +1101,8 @@ class Runner:
             error=error,
             details={**(config.details if config else {}), **outcome.details},
         )
+        if state.suite.defaults.privacy.mode == "strict":  # effective: project or suite
+            result = strict_check_result(result)
         result = self.waivers.apply(result)
         result = self._attach_artifacts(state, result, outcome, config)
         self._hook("enrich_result", result=result)
@@ -1172,7 +1218,6 @@ class Runner:
             for e in self.registry.entries()
             if e.distribution and e.distribution != "dvf"
         }
-        redact = global_redactor().redact_text
         return RunEnvironment(
             dvf_version=__version__,
             python_version=platform.python_version(),
@@ -1182,7 +1227,7 @@ class Runner:
             git_sha=_git_sha(self.loaded.base_dir),
             config_files=[str(f) for f in self.loaded.files],
             config_hash=self.config_hash,
-            cli_args=[redact(a) for a in (self.options.cli_args or sys.argv[1:])],
+            cli_args=redact_args(self.options.cli_args or sys.argv[1:]),
             plugins=plugins,
             engines=engines,
         )
@@ -1251,7 +1296,7 @@ class Runner:
         base = self.loaded.base_dir
         output_dir = self.output_dir or self._output_dir()
         formats = list(dict.fromkeys(["json", *(self.options.formats or reports.formats)]))
-        sections: list[ReportSection] = []
+        sections: list[ReportSection] = self.integrations.report_sections()
         for fmt in formats:
             for contributed in self._hook("report_sections", result=result, report_format=fmt):
                 for item in contributed or []:

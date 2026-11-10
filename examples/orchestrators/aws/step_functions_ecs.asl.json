@@ -1,0 +1,96 @@
+{
+  "Comment": "Run the dvf container (ghcr.io/<org>/dvf:latest-full, or a copy in ECR) as an ECS Fargate task and branch on its exit code: 0 passed, 1 quality gates failed, other values execution or configuration errors. A task that stops with a non-zero exit code may arrive as a task failure whose Cause holds the task description, so both paths are read. Input: {\"only\": \"tag:nightly\"}. Example only; not verified on AWS.",
+  "StartAt": "Run dvf",
+  "States": {
+    "Run dvf": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
+      "Parameters": {
+        "LaunchType": "FARGATE",
+        "Cluster": "arn:aws:ecs:eu-west-1:123456789012:cluster/data-quality",
+        "TaskDefinition": "arn:aws:ecs:eu-west-1:123456789012:task-definition/dvf:1",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "Subnets": ["subnet-0123456789abcdef0"],
+            "SecurityGroups": ["sg-0123456789abcdef0"],
+            "AssignPublicIp": "DISABLED"
+          }
+        },
+        "Overrides": {
+          "ContainerOverrides": [
+            {
+              "Name": "dvf",
+              "Command.$": "States.Array('run', '/work/dvf.yaml', '--only', $.only, '--output-dir', States.Format('/work/reports/{}', $$.Execution.Name))"
+            }
+          ]
+        }
+      },
+      "TimeoutSeconds": 14400,
+      "ResultPath": "$.dvf",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "ResultPath": "$.error",
+          "Next": "Read the stopped task"
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "dvf could not run"
+        }
+      ],
+      "Next": "Check exit code"
+    },
+    "Read the stopped task": {
+      "Type": "Pass",
+      "Parameters": {
+        "task.$": "States.StringToJson($.error.Cause)"
+      },
+      "ResultPath": "$.failed",
+      "Next": "Check exit code"
+    },
+    "Check exit code": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            { "Variable": "$.dvf.Containers[0].ExitCode", "IsPresent": true },
+            { "Variable": "$.dvf.Containers[0].ExitCode", "NumericEquals": 0 }
+          ],
+          "Next": "Validation passed"
+        },
+        {
+          "Or": [
+            {
+              "And": [
+                { "Variable": "$.dvf.Containers[0].ExitCode", "IsPresent": true },
+                { "Variable": "$.dvf.Containers[0].ExitCode", "NumericEquals": 1 }
+              ]
+            },
+            {
+              "And": [
+                { "Variable": "$.failed.task.Containers[0].ExitCode", "IsPresent": true },
+                { "Variable": "$.failed.task.Containers[0].ExitCode", "NumericEquals": 1 }
+              ]
+            }
+          ],
+          "Next": "Quality gates failed"
+        }
+      ],
+      "Default": "dvf could not run"
+    },
+    "Validation passed": {
+      "Type": "Succeed"
+    },
+    "Quality gates failed": {
+      "Type": "Fail",
+      "Error": "DvfQualityGatesFailed",
+      "Cause": "dvf exited with 1: checks failed at or above --fail-on, or the quality score is below --min-score."
+    },
+    "dvf could not run": {
+      "Type": "Fail",
+      "Error": "DvfExecutionError",
+      "Cause": "dvf exited with an execution (2) or configuration (3) error, or the task did not start."
+    }
+  }
+}

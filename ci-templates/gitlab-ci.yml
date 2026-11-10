@@ -1,0 +1,135 @@
+# dvf data validation for GitLab CI/CD. Documented in docs/ci.md.
+#
+# Copy this file into your project (as .gitlab-ci.yml, or include it from there) and adjust
+# the variables. Two jobs share one template:
+#
+#   dvf:pr       merge request pipelines   fast checks selected by DVF_PR_ONLY (tag:pr)
+#   dvf:nightly  scheduled pipelines       full comparisons selected by DVF_NIGHTLY_ONLY
+#
+# Create the schedule under Build > Pipeline schedules (for example "0 2 * * *"). Run a mode
+# by hand with "Run pipeline" and DVF_MODE=pr or DVF_MODE=nightly.
+#
+# Each job publishes junit.xml to the merge request's test report, keeps the reports as an
+# artifact (exposed in the merge request as "dvf report"), prints summary.md in the job log,
+# and fails by the gates (DVF_FAIL_ON, DVF_MIN_SCORE). dvf:mr-comment posts summary.md on the
+# merge request when the masked variable DVF_GITLAB_TOKEN (a project access token with the
+# api scope) is set.
+#
+# Credentials: define them as masked, protected CI/CD variables and reference them from the
+# configuration with ${secret:env:NAME}; never commit them.
+
+stages:
+  - validate
+  - report
+
+variables:
+  DVF_VERSION: "1.0.0"            # dvf-framework version from PyPI
+  DVF_EXTRAS: "postgres"          # extras, separated by commas ("" for none)
+  DVF_CONFIG: "dvf.yaml"
+  DVF_PROFILE: ""                 # environment profile, for example "ci"
+  DVF_PR_ONLY: "tag:pr"           # selectors for merge requests (space-separated)
+  DVF_NIGHTLY_ONLY: "tag:nightly" # selectors for scheduled runs ("" runs everything)
+  DVF_FAIL_ON: "error"            # info, warning, error, or critical
+  DVF_MIN_SCORE: ""               # for example "95"
+  DVF_EXTRA_ARGS: ""              # more 'dvf run' arguments, split on spaces
+  DVF_REPORT_DIR: "dvf-reports"   # keep in sync with the artifact paths below
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+.dvf:
+  stage: validate
+  image: python:3.12-slim
+  cache:
+    key: dvf-pip
+    paths:
+      - .cache/pip
+  before_script:
+    - |
+      spec="dvf-framework"
+      if [ -n "$DVF_EXTRAS" ]; then spec="${spec}[${DVF_EXTRAS}]"; fi
+      if [ -n "$DVF_VERSION" ]; then spec="${spec}==${DVF_VERSION}"; fi
+      python -m pip install --disable-pip-version-check "$spec"
+      dvf --version
+  script:
+    - |
+      set -f  # selectors are globs for dvf, not for the shell
+      set -- run "$DVF_CONFIG" --output-dir "$DVF_REPORT_DIR" --fail-on "$DVF_FAIL_ON" \
+        --format junit --format markdown --format html
+      for selector in $DVF_ONLY; do set -- "$@" --only "$selector"; done
+      if [ -n "$DVF_PROFILE" ]; then set -- "$@" --profile "$DVF_PROFILE"; fi
+      if [ -n "$DVF_MIN_SCORE" ]; then set -- "$@" --min-score "$DVF_MIN_SCORE"; fi
+      for arg in $DVF_EXTRA_ARGS; do set -- "$@" "$arg"; done
+      echo "dvf $*"
+      code=0
+      dvf "$@" || code=$?
+      if [ -f "$DVF_REPORT_DIR/summary.md" ]; then cat "$DVF_REPORT_DIR/summary.md"; fi
+      mkdir -p "$DVF_REPORT_DIR" && echo "$code" > "$DVF_REPORT_DIR/exit-code.txt"
+      case "$code" in
+        0) echo "dvf passed its quality gates" ;;
+        1) echo "dvf quality gates failed" ;;
+        *) echo "dvf could not complete the run (exit code $code)" ;;
+      esac
+      exit "$code"
+  artifacts:
+    when: always
+    expire_in: 30 days
+    expose_as: dvf report
+    paths:
+      - dvf-reports/
+    reports:
+      junit: dvf-reports/junit.xml
+
+dvf:pr:
+  extends: .dvf
+  variables:
+    DVF_ONLY: $DVF_PR_ONLY
+  rules:
+    - if: $DVF_MODE == "nightly"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $DVF_MODE == "pr"
+
+dvf:nightly:
+  extends: .dvf
+  variables:
+    DVF_ONLY: $DVF_NIGHTLY_ONLY
+  timeout: 4h
+  rules:
+    - if: $DVF_MODE == "pr"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $DVF_MODE == "nightly"
+
+# Optional: post summary.md as a merge request comment. Needs DVF_GITLAB_TOKEN (masked).
+dvf:mr-comment:
+  stage: report
+  image: python:3.12-slim
+  needs:
+    - job: dvf:pr
+      artifacts: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $DVF_GITLAB_TOKEN
+      when: always
+  script:
+    - |
+      python - <<'PY'
+      import json
+      import os
+      import urllib.request
+      from pathlib import Path
+
+      summary = Path(os.environ["DVF_REPORT_DIR"]) / "summary.md"
+      if not summary.is_file():
+          raise SystemExit("no summary.md to post")
+      url = (
+          f"{os.environ['CI_API_V4_URL']}/projects/{os.environ['CI_PROJECT_ID']}"
+          f"/merge_requests/{os.environ['CI_MERGE_REQUEST_IID']}/notes"
+      )
+      request = urllib.request.Request(
+          url,
+          data=json.dumps({"body": summary.read_text(encoding="utf-8")}).encode(),
+          headers={"PRIVATE-TOKEN": os.environ["DVF_GITLAB_TOKEN"], "Content-Type": "application/json"},
+          method="POST",
+      )
+      with urllib.request.urlopen(request, timeout=30) as response:
+          print(f"posted the dvf summary ({response.status})")
+      PY

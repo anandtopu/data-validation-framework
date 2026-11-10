@@ -28,6 +28,7 @@ from dvf.core.errors import ConfigError
 from dvf.models.results import DatasetPairResult, RunResult
 
 _UNSAFE = re.compile(r"[^A-Za-z0-9_.-]+")
+_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 MANIFEST = "manifest.json"
 RESULTS = "results.json"
 
@@ -55,6 +56,21 @@ def write_atomic(path: Path, text: str) -> None:
 
 def runs_dir(state_dir: Path) -> Path:
     return state_dir / "runs"
+
+
+def check_run_id(run_id: str) -> str:
+    """Return ``run_id`` if it is safe as a folder name, else raise :class:`ConfigError`.
+
+    Run IDs name folders under the state directory (and often the report folder), so they must
+    not contain path separators or ``..``.
+    """
+    if not _RUN_ID.match(run_id) or ".." in run_id:
+        raise ConfigError(
+            f"Invalid run ID {run_id!r}.",
+            hint="Use up to 128 letters, digits, '.', '_', and '-', starting with a letter or "
+            "digit, for example 20261106T101500Z-3f9a.",
+        )
+    return run_id
 
 
 class PartitionStore:
@@ -85,7 +101,7 @@ class CheckpointStore:
 
     def __init__(self, state_dir: Path, run_id: str, *, enabled: bool = True) -> None:
         self.state_dir = state_dir
-        self.run_id = run_id
+        self.run_id = check_run_id(run_id)
         self.enabled = enabled
         self.directory = runs_dir(state_dir) / run_id
 
@@ -177,7 +193,7 @@ def load_manifest(state_dir: Path, run_id: str) -> dict[str, Any]:
 
 def load_results(state_dir: Path, run_id: str) -> RunResult:
     """The saved results of an earlier run."""
-    path = runs_dir(state_dir) / run_id / RESULTS
+    path = runs_dir(state_dir) / check_run_id(run_id) / RESULTS
     if not path.exists():
         raise ConfigError(
             f"No saved results for run '{run_id}' in {runs_dir(state_dir)}.",

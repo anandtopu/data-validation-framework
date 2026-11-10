@@ -1,0 +1,77 @@
+{
+  "name": "dvf migration validation",
+  "description": "dvf: fast checks as a wheel task, full comparisons as a notebook task, then publish only when the gates pass. Example for the Jobs API 2.2 (databricks jobs create --json @job.json); not verified on a workspace.",
+  "max_concurrent_runs": 1,
+  "schedule": {
+    "quartz_cron_expression": "0 0 2 * * ?",
+    "timezone_id": "UTC",
+    "pause_status": "PAUSED"
+  },
+  "job_clusters": [
+    {
+      "job_cluster_key": "dvf",
+      "new_cluster": {
+        "spark_version": "17.3.x-scala2.13",
+        "node_type_id": "Standard_D4ds_v5",
+        "num_workers": 2,
+        "data_security_mode": "SINGLE_USER"
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "task_key": "dvf_fast",
+      "description": "PR-style checks (tag:pr) with the dvf console script; fails the job when the gates fail.",
+      "job_cluster_key": "dvf",
+      "libraries": [{ "pypi": { "package": "dvf-framework==1.0.0" } }],
+      "python_wheel_task": {
+        "package_name": "dvf_framework",
+        "entry_point": "dvf",
+        "parameters": [
+          "run",
+          "/Volumes/main/qa/dvf/dvf.yaml",
+          "--only",
+          "tag:pr",
+          "--output-dir",
+          "/Volumes/main/qa/dvf/reports/{{job.run_id}}/fast",
+          "--fail-on",
+          "error"
+        ]
+      }
+    },
+    {
+      "task_key": "dvf_full",
+      "description": "Nightly comparisons (tag:nightly) in a notebook; sets task values and reports without failing.",
+      "depends_on": [{ "task_key": "dvf_fast" }],
+      "job_cluster_key": "dvf",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Shared/dvf/dvf_notebook",
+        "base_parameters": {
+          "config": "/Volumes/main/qa/dvf/dvf.yaml",
+          "only": "tag:nightly",
+          "output_dir": "/Volumes/main/qa/dvf/reports/{{job.run_id}}/full",
+          "fail_on": "error",
+          "min_score": "95",
+          "raise_on_failure": "false"
+        }
+      }
+    },
+    {
+      "task_key": "gates_passed",
+      "description": "Branch on the task value set by dvf_full.",
+      "depends_on": [{ "task_key": "dvf_full" }],
+      "condition_task": {
+        "op": "EQUAL_TO",
+        "left": "{{tasks.dvf_full.values.dvf_passed}}",
+        "right": "true"
+      }
+    },
+    {
+      "task_key": "publish",
+      "description": "Runs only when the nightly validation passed its gates (replace with your publish step).",
+      "depends_on": [{ "task_key": "gates_passed", "outcome": "true" }],
+      "job_cluster_key": "dvf",
+      "notebook_task": { "notebook_path": "/Workspace/Shared/dvf/publish" }
+    }
+  ]
+}

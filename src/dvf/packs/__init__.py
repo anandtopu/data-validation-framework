@@ -21,6 +21,9 @@ PACKS: tuple[str, ...] = (
     "dvf.packs.sap",
     "dvf.packs.migration",
     "dvf.packs.discovery",
+    "dvf.packs.integrations",
+    "dvf.packs.secrets",
+    "dvf.packs.catalog",
 )
 """Pack modules registered with the built-ins, in order."""
 

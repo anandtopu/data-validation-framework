@@ -1,0 +1,65 @@
+"""The ``{{name}}`` normalizer.
+
+{{summary}}
+"""
+
+from __future__ import annotations
+
+from typing import Any, ClassVar
+
+from dvf.models import CanonicalType, LogicalType
+from dvf.plugins import Normalizer
+from pydantic import BaseModel, ConfigDict, Field
+
+_TEXT = (LogicalType.STRING, LogicalType.UNKNOWN)
+
+
+class {{class_name}}(Normalizer):
+    """Remove characters (spaces and hyphens by default) from text before comparing.
+
+    A normalizer rewrites values on both sides of a comparison before they are canonicalized
+    and hashed. Its three implementations must agree: SQL (pushed down to each database),
+    Polars (the ``polars`` engine), and Python (the reference, used by ``dvf trace``).
+    """
+
+    plugin_name: ClassVar[str] = "{{name}}"
+    dvf_plugin_api: ClassVar[str | None] = "{{plugin_api}}"
+
+    class Params(BaseModel):
+        """Parameters, as in ``{ name: {{name}}, params: { characters: " -" } }``."""
+
+        model_config = ConfigDict(extra="forbid")
+
+        characters: str = Field(default=" -", min_length=1)
+        """Characters removed from every value."""
+
+    params_model: ClassVar[type[BaseModel] | None] = Params
+
+    @property
+    def characters(self) -> str:
+        assert isinstance(self.params, self.Params)
+        return self.params.characters
+
+    def applies_to(self, ctype: CanonicalType) -> bool:
+        """Only text columns change; numbers, dates, and others pass through unchanged."""
+        return ctype.logical in _TEXT
+
+    def to_sql(self, expr: str, dialect: Any, ctype: CanonicalType) -> str:
+        """``REPLACE`` exists with these arguments in every SQL dialect dvf supports."""
+        for char in self.characters:
+            literal = "'" + char.replace("'", "''") + "'"
+            expr = f"REPLACE({expr}, {literal}, '')"
+        return expr
+
+    def to_polars(self, expr: Any, ctype: CanonicalType) -> Any:
+        for char in self.characters:
+            expr = expr.str.replace_all(char, "", literal=True)
+        return expr
+
+    def to_python(self, value: Any, ctype: CanonicalType) -> Any:
+        if value is None:
+            return None
+        text = str(value)
+        for char in self.characters:
+            text = text.replace(char, "")
+        return text

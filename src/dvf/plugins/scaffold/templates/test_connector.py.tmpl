@@ -1,0 +1,84 @@
+"""Tests of the ``{{name}}`` connector.
+
+Run ``pytest`` after ``pip install -e ".[test]"``.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+from dvf import api
+from dvf.models import Status
+from dvf.plugins import PluginKind, new_registry
+
+from {{module}}.{{kind_module}} import {{class_name}}
+
+NAME = "{{name}}"
+
+
+def _write_data(folder: Path, target_name: str = "Grace") -> None:
+    (folder / "customers.jsonl").write_text(
+        '{"id": 1, "name": "Ada"}\n{"id": 2, "name": "Grace"}\n', encoding="utf-8"
+    )
+    (folder / "customers.csv").write_text(f"id,name\n1,Ada\n2,{target_name}\n", encoding="utf-8")
+
+
+def _config() -> dict[str, Any]:
+    return {
+        "version": 1,
+        "project": {"name": "plugin-test"},
+        "defaults": {"execution": {"checkpoints": False}},
+        "connections": {
+            "source": {"type": NAME, "path": "."},
+            "target": {"type": "files", "path": "."},
+        },
+        "suites": [
+            {
+                "name": "landing",
+                "source": "source",
+                "target": "target",
+                "tables": [
+                    {
+                        "name": "customers",
+                        "source": {"table": "customers"},
+                        "target": {"path": "customers.csv"},
+                        "keys": ["id"],
+                        "comparison": {"strategies": ["row_count", "full_diff"]},
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_registered_through_its_entry_point() -> None:
+    registry = new_registry(load_entry_points=True)
+    assert registry.get(PluginKind.CONNECTOR, NAME).implementation is {{class_name}}
+    assert not registry.load_failures
+
+
+def test_identical_data_passes(tmp_path: Path) -> None:
+    _write_data(tmp_path)
+    loaded = api.load_config_data(_config(), base_dir=tmp_path)
+    result = api.run(loaded, write_reports=False, history=False).result
+    assert result.status is Status.PASSED, [c.message for c in result.iter_checks()]
+
+
+def test_a_changed_value_fails(tmp_path: Path) -> None:
+    _write_data(tmp_path, target_name="Hopper")
+    loaded = api.load_config_data(_config(), base_dir=tmp_path)
+    result = api.run(loaded, write_reports=False, history=False).result
+    assert result.status is Status.FAILED
+    failed = [c.check_id for c in result.iter_checks() if c.status is Status.FAILED]
+    assert any(".compare." in check_id for check_id in failed)
+
+
+def test_dataset_lookup(tmp_path: Path) -> None:
+    _write_data(tmp_path)
+    config = {{class_name}}.Config(type=NAME, path=str(tmp_path))
+    connector = {{class_name}}("landing", config, tmp_path)
+    assert connector.dataset_exists(SimpleNamespace(table="customers"))
+    assert not connector.dataset_exists(SimpleNamespace(table="missing"))
+    assert connector.list_datasets("cust*") == ["customers"]

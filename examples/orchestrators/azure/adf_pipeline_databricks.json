@@ -1,0 +1,48 @@
+{
+  "name": "dvf_validation_databricks",
+  "properties": {
+    "description": "Runs the dvf notebook (examples/orchestrators/databricks/dvf_notebook.py) with a Databricks Notebook activity, reads its JSON runOutput, and fails the pipeline when the quality gates failed. Works the same in Synapse pipelines. Example only; not verified against Azure.",
+    "parameters": {
+      "config": { "type": "string", "defaultValue": "/Volumes/main/qa/dvf/dvf.yaml" },
+      "only": { "type": "string", "defaultValue": "tag:nightly" },
+      "minScore": { "type": "string", "defaultValue": "95" }
+    },
+    "activities": [
+      {
+        "name": "Run dvf",
+        "type": "DatabricksNotebook",
+        "policy": { "timeout": "0.04:00:00", "retry": 0 },
+        "linkedServiceName": { "referenceName": "AzureDatabricks", "type": "LinkedServiceReference" },
+        "typeProperties": {
+          "notebookPath": "/Workspace/Shared/dvf/dvf_notebook",
+          "baseParameters": {
+            "config": "@pipeline().parameters.config",
+            "only": "@pipeline().parameters.only",
+            "min_score": "@pipeline().parameters.minScore",
+            "output_dir": "@concat('/Volumes/main/qa/dvf/reports/', pipeline().RunId)",
+            "fail_on": "error",
+            "raise_on_failure": "false"
+          }
+        }
+      },
+      {
+        "name": "Gates passed",
+        "type": "IfCondition",
+        "dependsOn": [{ "activity": "Run dvf", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "expression": { "value": "@bool(activity('Run dvf').output.runOutput.passed)", "type": "Expression" },
+          "ifFalseActivities": [
+            {
+              "name": "Fail the pipeline",
+              "type": "Fail",
+              "typeProperties": {
+                "message": "@concat('dvf run ', activity('Run dvf').output.runOutput.run_id, ' failed its quality gates (quality score ', string(activity('Run dvf').output.runOutput.quality_score), ')')",
+                "errorCode": "DVF_GATES_FAILED"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

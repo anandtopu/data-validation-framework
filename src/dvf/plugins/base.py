@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -27,10 +27,12 @@ if TYPE_CHECKING:
     from dvf.config.checks import CheckConfig
     from dvf.config.connections import ConnectionConfig
     from dvf.config.models import DatasetSpec, SinkConfig
+    from dvf.config.notifications import NotificationConfig
     from dvf.core.datasets import DatasetRef, DatasetSchema
     from dvf.core.types import CanonicalType
     from dvf.execution.context import RetryPolicy
     from dvf.models.results import ArtifactRef, RunResult
+    from dvf.packs.integrations.messages import NotificationMessage
     from dvf.reporting.base import ReportOptions
     from dvf.sql.dialects import Dialect
 
@@ -142,6 +144,111 @@ class ConnectionReport:
     duration_ms: float = 0.0
 
 
+# ---------------------------------------------------------------------- catalog metadata
+
+
+@dataclass(frozen=True)
+class IndexInfo:
+    """One index of a table, as reported by :meth:`Connector.get_physical_design`."""
+
+    name: str
+    columns: tuple[str, ...]
+    """Indexed columns (or expressions) in index order."""
+    unique: bool = False
+    primary: bool = False
+    kind: str | None = None
+    """Index method or type, such as ``btree``, ``CLUSTERED``, or ``BITMAP``."""
+    predicate: str | None = None
+    """The filter of a partial (filtered) index."""
+
+
+@dataclass(frozen=True)
+class PhysicalDesign:
+    """Physical design of a table (schema check SCH-07, informational)."""
+
+    indexes: tuple[IndexInfo, ...] = ()
+    partitioning: str | None = None
+    """How the table is partitioned (``RANGE (posting_date)``), or None when it is not."""
+    clustering: tuple[str, ...] = ()
+    """Clustering columns or the clustered index's columns."""
+    distribution: str | None = None
+    """Distribution key or style (MPP warehouses)."""
+    sort_keys: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
+    """What the connector could not determine."""
+
+
+@dataclass(frozen=True)
+class ColumnCollation:
+    """The collation and character set of one text column, and how it compares text.
+
+    ``None`` means unknown. Semantics are what matter across systems, since collation names
+    differ: ``SQL_Latin1_General_CP1_CI_AS`` and ``utf8mb4_0900_as_ci`` both compare
+    case-insensitively and accent-sensitively.
+    """
+
+    collation: str | None = None
+    charset: str | None = None
+    case_sensitive: bool | None = None
+    accent_sensitive: bool | None = None
+    unicode: bool | None = None
+    """Whether the column can store every Unicode character."""
+
+
+@dataclass(frozen=True)
+class CollationInfo:
+    """Collations and character sets of a table's columns (schema check SCH-09)."""
+
+    default_collation: str | None = None
+    """The table's or database's default collation."""
+    charset: str | None = None
+    """The database character set (encoding)."""
+    columns: Mapping[str, ColumnCollation] = field(default_factory=dict)
+    """Text columns by name; columns that are not listed use the default collation."""
+    case_sensitive_default: bool | None = None
+    """Whether the default collation compares case-sensitively, when the system says so."""
+    accent_sensitive_default: bool | None = None
+    unicode_default: bool | None = None
+
+    def for_column(self, name: str) -> ColumnCollation:
+        """The effective collation of column ``name`` (case-insensitive lookup)."""
+        found = self.columns.get(name)
+        if found is None:
+            lowered = name.lower()
+            found = next((c for n, c in self.columns.items() if n.lower() == lowered), None)
+        if found is not None:
+            return found
+        return ColumnCollation(
+            collation=self.default_collation,
+            charset=self.charset,
+            case_sensitive=self.case_sensitive_default,
+            accent_sensitive=self.accent_sensitive_default,
+            unicode=self.unicode_default,
+        )
+
+
+OBJECT_TYPES: tuple[str, ...] = (
+    "view",
+    "procedure",
+    "function",
+    "trigger",
+    "sequence",
+    "synonym",
+)
+"""Object types in an :class:`ObjectInventory` (schema check SCH-10)."""
+
+
+@dataclass(frozen=True)
+class ObjectInventory:
+    """Names of the database objects in one schema (schema check SCH-10, informational)."""
+
+    schema: str | None
+    objects: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    """Object names by type (see :data:`OBJECT_TYPES`)."""
+    unsupported: tuple[str, ...] = ()
+    """Object types the system does not have (SQLite has no procedures)."""
+
+
 class Connector(Component):
     """Base class for connectors.
 
@@ -241,6 +348,23 @@ class Connector(Component):
         raise ConnectorError(
             f"Connection '{self.name}' ({self.plugin_name or type(self).__name__}) cannot list datasets"
         )
+
+    # ------------------------------------------------------------------ catalog metadata
+    # Optional: schema checks SCH-07, SCH-09, and SCH-10 call these. ``None`` (the default)
+    # means "not available", and the check is skipped with a message.
+
+    def get_physical_design(self, relation: Relation) -> PhysicalDesign | None:
+        """Indexes, partitioning, clustering, and distribution of a catalog table, if known."""
+        return None
+
+    def get_collations(self, relation: Relation) -> CollationInfo | None:
+        """Collations and character sets of a catalog table's text columns, if known."""
+        return None
+
+    def get_object_inventory(self, relation: Relation) -> ObjectInventory | None:
+        """Views, procedures, functions, triggers, sequences, and synonyms in the schema of
+        ``relation`` (its qualified table name, else the session's default schema), if known."""
+        return None
 
     # ------------------------------------------------------------------ queries
     def query(self, sql: str) -> pa.Table:  # pragma: no cover - interface
@@ -421,4 +545,13 @@ class ResultSink(Component):
 
 
 class Notifier(Component):
-    """Base class for notification channels. Subclasses declare a nested ``Config`` model."""
+    """Base class for notification channels. Subclasses declare a nested ``Config`` model and
+    implement :meth:`send`."""
+
+    def __init__(self, config: NotificationConfig) -> None:
+        self.config = config
+
+    def send(self, message: NotificationMessage) -> None:  # pragma: no cover - interface
+        """Deliver ``message``; raise on failure (an exception with ``transient = True`` is
+        retried)."""
+        raise NotImplementedError(f"{type(self).__name__} does not implement send()")

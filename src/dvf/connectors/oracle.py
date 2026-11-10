@@ -1,5 +1,5 @@
 """Oracle Database connector (python-oracledb in thin mode; install with
-``pip install 'dvf[oracle]'``).
+``pip install 'dvf-framework[oracle]'``).
 
 Thin mode needs no Oracle Client libraries. Sessions use UTC (``TIME_ZONE = '+00:00'``), binary
 comparison and sorting (``NLS_COMP``/``NLS_SORT = BINARY``), ISO date formats, and ``.`` as the
@@ -33,7 +33,14 @@ from dvf.connectors.mssql import as_of_utc
 from dvf.core.datasets import ColumnSchema, DatasetKind, DatasetRef, DatasetSchema
 from dvf.core.errors import ConnectorError, DependencyError
 from dvf.core.types import parse_native_type
-from dvf.plugins.base import ConnectionReport, Connector, Relation
+from dvf.plugins.base import (
+    CollationInfo,
+    ConnectionReport,
+    Connector,
+    ObjectInventory,
+    PhysicalDesign,
+    Relation,
+)
 from dvf.sql.oracle import strip_subquery_alias_as
 
 logger = logging.getLogger(__name__)
@@ -470,6 +477,22 @@ class OracleConnector(Connector):
             if fnmatchcase(target.lower(), pattern.lower()):
                 names.append(target)
         return sorted(set(names))
+
+    # ------------------------------------------------------------------ catalog metadata
+    def get_physical_design(self, relation: Relation) -> PhysicalDesign | None:
+        from dvf.packs.catalog.introspect import physical_design
+
+        return physical_design(self, relation)
+
+    def get_collations(self, relation: Relation) -> CollationInfo | None:
+        from dvf.packs.catalog.introspect import collations
+
+        return collations(self, relation)
+
+    def get_object_inventory(self, relation: Relation) -> ObjectInventory | None:
+        from dvf.packs.catalog.introspect import object_inventory
+
+        return object_inventory(self, relation)
 
 
 def _output_type_handler(cursor: Any, metadata: Any) -> Any:

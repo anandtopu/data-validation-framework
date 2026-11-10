@@ -1,0 +1,15 @@
+# The images need only the package sources, the project metadata, and the lockfile.
+# Everything else is excluded, so local state (.venv, .dvf, reports, .env files) never
+# reaches a build context.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!NOTICE
+!src/
+
+**/__pycache__/
+**/*.py[cod]
+**/.DS_Store
+src/dvf/_version.py

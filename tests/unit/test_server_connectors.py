@@ -467,7 +467,7 @@ def test_missing_driver_raises_dependency_error(
     with pytest.raises(DependencyError) as info:
         instance.open()
     assert info.value.extra == extra
-    assert f"dvf[{extra}]" in (info.value.hint or "")
+    assert f"dvf-framework[{extra}]" in (info.value.hint or "")
 
 
 # ====================================================================== fake drivers

@@ -1,0 +1,373 @@
+name: Release
+
+# How a release happens (docs/releasing.md has the maintainer guide):
+#
+# 1. Conventional commits land on main. release-please keeps a release pull request open that
+#    bumps the version in .release-please-manifest.json (the version itself comes from the
+#    git tag through hatch-vcs; CHANGELOG.md is curated by hand).
+# 2. Merging that pull request makes release-please tag vX.Y.Z and create the GitHub Release.
+# 3. The jobs below then build the tag, publish to PyPI with Trusted Publishing, push the
+#    container images to GHCR, attest everything, set the release notes from the version's
+#    CHANGELOG.md section, attach the distributions and SBOMs, and publish the documentation.
+#
+# Pushing a vX.Y.Z tag by hand, or running this workflow manually with an existing tag, runs
+# the same jobs from step 3. Every step is safe to re-run: PyPI skips files it already has,
+# images are re-tagged, and release assets are replaced.
+#
+# Tags and releases created by release-please with GITHUB_TOKEN do not trigger other
+# workflows, which is why publishing happens here rather than in a tag-triggered workflow.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and publish, for example v1.0.0
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.12"
+  NOX: nox@2026.10.20
+  TWINE: twine@7.0.0
+
+jobs:
+  release-please:
+    name: Release pull request and tag
+    if: github.event_name == 'push' && github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # tags, GitHub Releases, the release branch
+      pull-requests: write # the release pull request
+      issues: write # labels on the release pull request
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  prepare:
+    name: Resolve the release tag
+    needs: release-please
+    if: >-
+      ${{ !cancelled() && needs.release-please.result != 'failure' && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'push' && github.ref_type == 'tag') ||
+        needs.release-please.outputs.release_created == 'true') }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+    steps:
+      - id: tag
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_PLEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then
+            tag="$INPUT_TAG"
+          elif [ "$REF_TYPE" = tag ]; then
+            tag="$REF_NAME"
+          else
+            tag="$RELEASE_PLEASE_TAG"
+          fi
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([-.]?[0-9A-Za-z.]+)?$'; then
+            echo "::error::'$tag' is not a release tag of the form vX.Y.Z"
+            exit 1
+          fi
+          version="${tag#v}"
+          # Anything after X.Y.Z (rc1, -beta.2, ...) marks a pre-release: no 'latest' image
+          # tags and no documentation deployment.
+          if printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            prerelease=false
+          else
+            prerelease=true
+          fi
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag (pre-release: $prerelease)"
+
+  # Jobs below state their conditions explicitly: release-please is skipped for tag pushes
+  # and manual runs, and a skipped ancestor would otherwise skip every later job.
+  build:
+    name: Build and check the distributions
+    needs: prepare
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 0 # hatch-vcs derives the version from the tag
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: false # release builds never restore caches
+      - name: Build the sdist and wheel
+        run: uv build --out-dir dist
+      - name: Check the distributions (metadata and README rendering)
+        run: uvx "$TWINE" check --strict dist/*
+      - name: Check that the built version matches the tag
+        id: version
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          uv run --no-project --with "packaging>=24" python - <<'EOF'
+          import os
+          from pathlib import Path
+
+          from packaging.utils import parse_wheel_filename
+          from packaging.version import Version
+
+          (wheel,) = Path("dist").glob("*.whl")
+          name, built, _, _ = parse_wheel_filename(wheel.name)
+          expected = Version(os.environ["TAG"].removeprefix("v"))
+          if name != "dvf-framework" or built != expected:
+              raise SystemExit(f"built {name} {built}, but the tag says dvf-framework {expected}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"version={built}\n")
+          print(f"dvf-framework {built}")
+          EOF
+      - name: Smoke-test the wheel in a clean environment
+        run: |
+          uv venv "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv" dist/*.whl
+          "$RUNNER_TEMP/venv/bin/dvf" --version
+          "$RUNNER_TEMP/venv/bin/dvf" init "$RUNNER_TEMP/demo" --example
+          set +e
+          "$RUNNER_TEMP/venv/bin/dvf" run "$RUNNER_TEMP/demo/dvf.yaml" -o "$RUNNER_TEMP/out"
+          code=$?
+          set -e
+          test "$code" -eq 1 # the example has seeded defects
+          test -f "$RUNNER_TEMP/out/report.html"
+      - name: CycloneDX SBOMs from uv.lock
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: uvx "$NOX" -s sbom -- --version "$VERSION" --output-dir sbom
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom/
+          if-no-files-found: error
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [prepare, build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/dvf-framework/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write # Trusted Publishing, Sigstore signing
+      attestations: write # GitHub build provenance
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - name: Build provenance for the sdist and wheel
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*
+      # Trusted Publishing: no API token exists anywhere. PyPI trusts this repository, this
+      # workflow file, and the 'pypi' environment. PEP 740 attestations are uploaded too.
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: dist/
+          skip-existing: true
+
+  images:
+    name: Container image (${{ matrix.variant }})
+    needs: [prepare, build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # Sigstore signing of the provenance attestation
+      attestations: write
+      artifact-metadata: write # storage record for the attested image
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [slim, full]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
+      - name: Image name and source commit
+        id: image
+        run: |
+          echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/dvf" >> "$GITHUB_OUTPUT"
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Tags: slim is X.Y.Z, X.Y, X, and latest; full adds the -full suffix to each.
+      # Pre-releases get only their exact version (the tag without its leading v).
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: ${{ steps.image.outputs.name }}
+          flavor: |
+            latest=false
+            suffix=${{ matrix.variant == 'full' && '-full' || '' }},onlatest=true
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.prepare.outputs.tag }},enable=${{ needs.prepare.outputs.prerelease == 'false' }}
+            type=semver,pattern={{major}},value=${{ needs.prepare.outputs.tag }},enable=${{ needs.prepare.outputs.prerelease == 'false' }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.prerelease == 'false' }}
+          labels: |
+            org.opencontainers.image.title=dvf-${{ matrix.variant }}
+            org.opencontainers.image.version=${{ needs.build.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.image.outputs.revision }}
+            org.opencontainers.image.licenses=Apache-2.0
+          annotations: |
+            org.opencontainers.image.title=dvf-${{ matrix.variant }}
+            org.opencontainers.image.version=${{ needs.build.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.image.outputs.revision }}
+            org.opencontainers.image.licenses=Apache-2.0
+      - id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile.${{ matrix.variant }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          build-args: |
+            DVF_VERSION=${{ needs.build.outputs.version }}
+            VCS_REF=${{ steps.image.outputs.revision }}
+            SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
+          # BuildKit SLSA provenance and an SPDX SBOM of the image contents, stored with
+          # the image in the registry.
+          provenance: mode=max
+          sbom: true
+      - name: Build provenance for the image
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: Smoke-test the pushed image
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          test "$(docker run --rm "$IMAGE" --version)" = "dvf $VERSION"
+          mkdir -m 0777 "$RUNNER_TEMP/work"
+          docker run --rm --user "$(id -u):$(id -g)" -v "$RUNNER_TEMP/work:/work" "$IMAGE" init /work/demo --example
+          set +e
+          docker run --rm --user "$(id -u):$(id -g)" -v "$RUNNER_TEMP/work:/work" "$IMAGE" run /work/demo/dvf.yaml -o /work/out
+          code=$?
+          set -e
+          test "$code" -eq 1
+          test -f "$RUNNER_TEMP/work/out/report.html"
+
+  github-release:
+    name: GitHub Release
+    needs: [prepare, build, publish-pypi, images]
+    if: >-
+      ${{ !cancelled() && needs.publish-pypi.result == 'success' &&
+        needs.images.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create or edit the release and upload assets
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+          path: sbom/
+      - name: Create or update the release, with the CHANGELOG.md section as its notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          notes="$RUNNER_TEMP/notes.md"
+          if uvx "$NOX" -s release_notes -- "$VERSION" "$notes"; then
+            notes_flags=(--notes-file "$notes")
+          else
+            echo "::warning::CHANGELOG.md has no section for $VERSION; using generated notes"
+            notes_flags=()
+          fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            # release-please created it; replace its notes with the curated section.
+            if [ "${#notes_flags[@]}" -gt 0 ]; then
+              gh release edit "$TAG" "${notes_flags[@]}"
+            fi
+          else
+            [ "${#notes_flags[@]}" -gt 0 ] || notes_flags=(--generate-notes)
+            prerelease_flag=()
+            [ "$PRERELEASE" = true ] && prerelease_flag=(--prerelease)
+            gh release create "$TAG" --verify-tag --title "$TAG" "${notes_flags[@]}" "${prerelease_flag[@]}"
+          fi
+          gh release upload "$TAG" dist/* sbom/* --clobber
+
+  docs:
+    name: Documentation
+    needs: [prepare, github-release]
+    if: >-
+      ${{ !cancelled() && needs.github-release.result == 'success' &&
+        needs.prepare.outputs.prerelease == 'false' }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yml
+    with:
+      ref: ${{ needs.prepare.outputs.tag }}

@@ -1,0 +1,41 @@
+"""The ``{{name}}`` notification channel.
+
+{{summary}}
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+{{notifier_imports}}
+
+
+class {{class_name}}(Notifier):
+    """Append one JSON object per notified run to a file.
+
+    dvf calls :meth:`send` after a run whose status is in the channel's ``on`` list (and for
+    ``dvf notify test``), with a privacy-filtered message: no sample values unless
+    ``include_samples`` is set, and counts only in strict privacy mode. Raise an exception when
+    delivery fails; an exception with ``transient = True`` is retried with backoff. A failing
+    channel is reported but never fails the run.
+    """
+
+    plugin_name: ClassVar[str] = "{{name}}"
+    dvf_plugin_api: ClassVar[str | None] = "{{plugin_api}}"
+
+    class Config(NotificationConfig):
+        """Settings of a ``{{name}}`` channel, on top of the common notification settings."""
+
+        path: str
+        """File that receives one JSON line per notified run (relative to the working
+        directory)."""
+
+    def __init__(self, config: Config) -> None:
+        self.config = config
+
+    def send(self, message: {{message_type}}) -> None:
+        """Deliver ``message`` (its fields, or ``message.to_dict()`` for a JSON payload)."""
+        path = Path(self.config.path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(message.to_dict(), default=str) + "\n")

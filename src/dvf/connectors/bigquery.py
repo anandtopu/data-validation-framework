@@ -1,4 +1,4 @@
-"""Google BigQuery connector (beta; install with ``pip install 'dvf[bigquery]'``).
+"""Google BigQuery connector (beta; install with ``pip install 'dvf-framework[bigquery]'``).
 
 Implemented from the google-cloud-bigquery documentation and tested against a fake client; it
 has not been verified against a live project.

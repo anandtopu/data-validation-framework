@@ -21,7 +21,9 @@ from dvf.checks.pair import CheckEnvironment, EnvironmentAware, PairColumn, Pair
 from dvf.config.checks import CheckConfig
 from dvf.config.connections import ConnectionConfig
 from dvf.config.notifications import NotificationConfig
+from dvf.connectors.staged import StagedConnector, StagedData
 from dvf.core.enums import Dimension, Severity, Side
+from dvf.packs.integrations.messages import NotificationError, NotificationMessage
 from dvf.plugins.base import (
     Check,
     Comparator,
@@ -78,6 +80,8 @@ __all__ = [
     "EnvironmentAware",
     "Normalizer",
     "NotificationConfig",
+    "NotificationError",
+    "NotificationMessage",
     "Notifier",
     "PairCheck",
     "PairColumn",
@@ -97,6 +101,8 @@ __all__ = [
     "SecretRef",
     "Severity",
     "Side",
+    "StagedConnector",
+    "StagedData",
     "activate",
     "get_registry",
     "hookimpl",

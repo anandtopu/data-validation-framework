@@ -1,4 +1,4 @@
-"""Microsoft SQL Server connector (mssql-python; install with ``pip install 'dvf[mssql]'``).
+"""Microsoft SQL Server connector (mssql-python; install with ``pip install 'dvf-framework[mssql]'``).
 
 ``mssql-python`` is Microsoft's DB-API driver; it bundles its own TDS client, so no ODBC driver
 needs to be installed. Query timeouts use the driver's per-statement timeout. SQL Server has no
@@ -26,7 +26,7 @@ from dvf.connectors.arrow import batches_from_rows, rows_to_table
 from dvf.core.datasets import ColumnSchema, DatasetKind, DatasetRef, DatasetSchema
 from dvf.core.errors import ConnectorError, DependencyError
 from dvf.core.types import parse_native_type
-from dvf.plugins.base import Connector, Relation
+from dvf.plugins.base import CollationInfo, Connector, ObjectInventory, PhysicalDesign, Relation
 
 logger = logging.getLogger(__name__)
 
@@ -412,6 +412,22 @@ class MSSQLConnector(Connector):
             if fnmatchcase(target.lower(), pattern.lower()):
                 names.append(target)
         return sorted(names)
+
+    # ------------------------------------------------------------------ catalog metadata
+    def get_physical_design(self, relation: Relation) -> PhysicalDesign | None:
+        from dvf.packs.catalog.introspect import physical_design
+
+        return physical_design(self, relation)
+
+    def get_collations(self, relation: Relation) -> CollationInfo | None:
+        from dvf.packs.catalog.introspect import collations
+
+        return collations(self, relation)
+
+    def get_object_inventory(self, relation: Relation) -> ObjectInventory | None:
+        from dvf.packs.catalog.introspect import object_inventory
+
+        return object_inventory(self, relation)
 
 
 def native_type_name(type_name: str, max_length: Any, precision: Any, scale: Any) -> str:

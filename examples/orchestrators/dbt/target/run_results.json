@@ -1,0 +1,55 @@
+{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/run-results/v6.json",
+    "dbt_version": "1.10.0",
+    "generated_at": "2026-11-08T08:05:00Z",
+    "invocation_id": "00000000-0000-4000-8000-000000000000",
+    "env": {}
+  },
+  "results": [
+    {
+      "unique_id": "model.jaffle_shop.stg_customers",
+      "status": "success",
+      "message": "OK",
+      "execution_time": 0.1,
+      "thread_id": "Thread-1",
+      "timing": [],
+      "adapter_response": {},
+      "failures": null
+    },
+    {
+      "unique_id": "model.jaffle_shop.customers",
+      "status": "success",
+      "message": "OK",
+      "execution_time": 0.2,
+      "thread_id": "Thread-1",
+      "timing": [],
+      "adapter_response": {},
+      "failures": null
+    },
+    {
+      "unique_id": "model.jaffle_shop.orders",
+      "status": "success",
+      "message": "OK",
+      "execution_time": 0.2,
+      "thread_id": "Thread-2",
+      "timing": [],
+      "adapter_response": {},
+      "failures": null
+    },
+    {
+      "unique_id": "test.jaffle_shop.not_null_customers_customer_id.0000000001",
+      "status": "pass",
+      "message": null,
+      "execution_time": 0.05,
+      "thread_id": "Thread-1",
+      "timing": [],
+      "adapter_response": {},
+      "failures": 0
+    }
+  ],
+  "elapsed_time": 1.5,
+  "args": {
+    "which": "build"
+  }
+}

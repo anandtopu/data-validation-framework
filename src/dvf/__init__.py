@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+DISTRIBUTION = "dvf-framework"
+"""The name dvf is published under on PyPI (the import package and the command are ``dvf``)."""
+
 try:
-    __version__ = version("dvf")
+    __version__ = version(DISTRIBUTION)
 except PackageNotFoundError:  # pragma: no cover - only when running from an uninstalled tree
     __version__ = "0.0.0+unknown"
 

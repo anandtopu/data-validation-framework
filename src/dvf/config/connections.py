@@ -21,6 +21,7 @@ class ConnectionConfig(StrictModel):
     type: str
     """Connector type, for example ``postgres``, ``snowflake``, or ``files``."""
     description: str | None = None
+    """Free-text description of the connection."""
     read_only: bool = True
     """dvf never writes to read-only connections. Keep this on for source and target systems."""
     max_parallel_queries: PositiveInt | None = None
@@ -88,12 +89,18 @@ class DatabaseConnection(ConnectionConfig):
     url: SecretStr | None = None
     """A SQLAlchemy-style URL. Treated as a secret because it may contain a password."""
     host: str | None = None
+    """Server host name, used when ``url`` is not set (one of the two is required)."""
     port: Port | None = Field(default=None, ge=1, le=65535)
+    """Server port; the connector's standard port when omitted (for example 5432 for
+    ``postgres``)."""
     database: str | None = None
+    """Database name (the service name for ``oracle``)."""
     schema_: str | None = Field(default=None, alias="schema")
     """Default schema for unqualified table names."""
     user: str | None = None
+    """Login name."""
     password: SecretStr | None = None
+    """Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret."""
     driver: str | None = None
     """ODBC driver name or driver variant, where the connector supports a choice."""
 
@@ -108,24 +115,42 @@ class SnowflakeConnection(ConnectionConfig):
     """Snowflake."""
 
     account: str
+    """Account identifier, such as ``myorg-myaccount``."""
     user: str | None = None
+    """Login name."""
     password: SecretStr | None = None
+    """Password of ``user``; with ``authenticator: oauth``, the access token when ``options.token``
+    is not set. Use a ``${secret:...}`` reference; it is treated as a secret."""
     authenticator: str | None = None
     """For example ``externalbrowser``, ``oauth``, or ``snowflake_jwt``."""
     private_key_path: str | None = None
+    """Private key file for key pair authentication, relative to the configuration's folder. The
+    authenticator then defaults to ``SNOWFLAKE_JWT``."""
     private_key_passphrase: SecretStr | None = None
+    """Passphrase of an encrypted private key. Use a ``${secret:...}`` reference; it is treated as a
+    secret."""
     warehouse: str | None = None
+    """Virtual warehouse that runs the queries."""
     database: str | None = None
+    """Default database for unqualified table names."""
     schema_: str | None = Field(default=None, alias="schema")
+    """Default schema for unqualified table names."""
     role: str | None = None
+    """Role of the session. Use one with read-only grants: Snowflake has no read-only session
+    mode."""
 
 
 class BigQueryConnection(ConnectionConfig):
     """Google BigQuery."""
 
     project: str
+    """Google Cloud project that runs the query jobs and qualifies dataset names given without
+    one."""
     dataset: str | None = None
+    """Default dataset for unqualified table names, as ``dataset`` or ``project.dataset``."""
     location: str | None = None
+    """Location of the query jobs, such as ``US`` or ``europe-west3``; the client's default when
+    omitted."""
     credentials_path: str | None = None
     """Service account key file; omit to use application default credentials."""
 
@@ -134,11 +159,19 @@ class DatabricksConnection(ConnectionConfig):
     """Databricks SQL warehouse or cluster through the SQL connector."""
 
     server_hostname: str
+    """Host name from the SQL warehouse's or cluster's connection details; a pasted ``https://`` URL
+    is accepted."""
     http_path: str
+    """HTTP path from the SQL warehouse's or cluster's connection details."""
     access_token: SecretStr | None = None
+    """Personal access token. Use a ``${secret:...}`` reference; it is treated as a secret."""
     auth_type: str | None = None
+    """Another authentication type supported by the driver, such as ``databricks-oauth`` (browser
+    sign-in), instead of ``access_token``."""
     catalog: str | None = None
+    """Initial catalog of the session, for unqualified table names."""
     schema_: str | None = Field(default=None, alias="schema")
+    """Initial schema of the session, for unqualified table names."""
 
 
 class SparkConnection(ConnectionConfig):
@@ -166,6 +199,7 @@ class MongoDBConnection(ConnectionConfig):
     uri: SecretStr
     """Connection string. Treated as a secret because it usually contains credentials."""
     database: str
+    """Database holding the collections that datasets name."""
     read_preference: (
         Literal["primary", "primaryPreferred", "secondary", "secondaryPreferred", "nearest"] | None
     ) = None
@@ -191,16 +225,20 @@ class SapHanaConnection(ConnectionConfig):
     """SAP HANA at database level (requires the user-installed ``hdbcli`` driver)."""
 
     host: str
+    """HANA host name."""
     port: Port = Field(default=30015, ge=1, le=65535)
     """SQL port: ``3<instance>15`` for single-container systems, ``3<instance>13`` (system
     database) or ``3<instance>41`` and up (tenants) for multitenant ones, 443 for HANA Cloud."""
     user: str | None = None
+    """Database user; give it read privileges on the SAP schema only."""
     password: SecretStr | None = None
+    """Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret."""
     schema_: str | None = Field(default=None, alias="schema")
     """The SAP schema (for example ``SAPSR3`` or ``SAPHANADB``) for unqualified table names."""
     client: str | None = Field(default=None, pattern=r"^\d{3}$")
     """SAP client (MANDT), applied as a filter to client-dependent tables."""
     encrypt: bool = True
+    """Connect with TLS (hdbcli ``encrypt``)."""
     database_name: str | None = None
     """Tenant database to connect to on a multitenant system (hdbcli ``databaseName``)."""
     ssl_validate_certificate: bool = True
@@ -226,6 +264,7 @@ class SapRfcConnection(ConnectionConfig):
     mshost: str | None = None
     """Message server host (load-balanced connection)."""
     sysnr: str | None = Field(default=None, pattern=r"^\d{2}$")
+    """Two-digit instance number of the application server, for direct logon with ``ashost``."""
     sysid: str | None = None
     """System ID, for load-balanced connections through a message server."""
     msserv: str | None = None
@@ -237,8 +276,12 @@ class SapRfcConnection(ConnectionConfig):
     client: str = Field(pattern=r"^\d{3}$")
     """SAP client to log on to. Client-dependent tables are read in this client."""
     user: str | None = None
+    """SAP user to log on with (HTTP basic authentication for the ``odata`` backend)."""
     password: SecretStr | None = None
+    """Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret."""
     lang: str = "EN"
+    """Logon language, such as ``EN``; also used for dictionary texts and sent to OData services as
+    ``sap-language``."""
     backend: str = "pyrfc"
     """How dvf talks to SAP: ``pyrfc`` (RFC through the user-installed, no longer maintained PyRFC
     and NW RFC SDK), ``custom_fm`` (PyRFC with your own read function module), ``odata`` (OData
@@ -280,13 +323,18 @@ class SqlAlchemyConnection(ConnectionConfig):
     """Any database with a SQLAlchemy dialect."""
 
     url: SecretStr
+    """SQLAlchemy database URL, such as ``dialect+driver://user:password@host/database``. Use a
+    ``${secret:...}`` reference; it is treated as a secret."""
 
 
 class OdbcConnection(ConnectionConfig):
     """Any database with an ODBC driver."""
 
     dsn: str | None = None
+    """ODBC data source name. Set exactly one of ``dsn`` and ``connection_string``."""
     connection_string: SecretStr | None = None
+    """Full ODBC connection string, treated as a secret because it may contain a password. Set
+    exactly one of ``dsn`` and ``connection_string``."""
 
     @model_validator(mode="after")
     def _dsn_or_string(self) -> OdbcConnection:

@@ -17,6 +17,7 @@ import pluggy
 if TYPE_CHECKING:
     from dvf.config.models import DvfConfig, SuiteConfig
     from dvf.models.results import CheckResult, RunResult, SuiteResult
+    from dvf.packs.integrations.triage import TriageSummary
 
 PROJECT_NAME = "dvf"
 
@@ -70,4 +71,17 @@ class HookSpecs:
     @hookspec
     def report_sections(self, result: RunResult, report_format: str) -> list[dict[str, Any]]:
         """Return extra report sections, each ``{"title": str, "content": str}``. (Phase 1)"""
+        raise NotImplementedError
+
+    @hookspec
+    def triage_failures(self, summary: TriageSummary) -> list[dict[str, Any]] | None:
+        """Suggest causes of a run's failures: the AI-assisted triage interface. (Phase 4)
+
+        Called only when the configuration opts in with ``triage.enabled: true``, after the run
+        and before reports render, and only if checks failed or errored. ``summary`` holds
+        masked, aggregated data only: check IDs, types, statuses, row counts, column names, and
+        per-column counts of mismatch classes; never values, samples, queries, messages, or
+        hints. Return suggestions as ``{"summary": str, "check_id": str | None, "source": str |
+        None}``; they are shown in the reports. dvf ships no implementation.
+        """
         raise NotImplementedError

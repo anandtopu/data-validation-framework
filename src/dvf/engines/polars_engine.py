@@ -1,5 +1,5 @@
 """The Polars engine: raw values are fetched as Arrow, then normalized, canonicalized, and diffed
-with Polars expressions (``pip install 'dvf[polars]'``)."""
+with Polars expressions (``pip install 'dvf-framework[polars]'``)."""
 
 from __future__ import annotations
 

@@ -168,8 +168,9 @@ def test_resolver_records_values(registry: Registry) -> None:
     assert resolver.resolve(SecretRef.parse("env:TOKEN")) == "tok-12345"
     assert resolver.resolve(SecretRef.parse("env:TOKEN")) == "tok-12345"  # provider cached
     assert "tok-12345" in redactor
-    with pytest.raises(SecretError, match="planned for the 'vault' extra"):
-        resolver.resolve(SecretRef.parse("vault:kv/db#pw"))
+    registry.declare("secret_provider", "planned", "A provider declared for later", extra="future")
+    with pytest.raises(SecretError, match="planned for the 'future' extra"):
+        resolver.resolve(SecretRef.parse("planned:kv/db#pw"))
     with pytest.raises(SecretError, match="Unknown secret provider 'nope'"):
         resolver.resolve(SecretRef.parse("nope:x"))
 

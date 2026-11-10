@@ -41,7 +41,8 @@ from dvf.models.results import (
 from dvf.normalize.canonical import Kind, canonical_text, resolve_pair
 from dvf.plugins.base import Comparator
 from dvf.plugins.registry import PluginKind
-from dvf.security.masking import to_json_safe
+from dvf.security.masking import hide_profile, hide_profile_differences, to_json_safe
+from dvf.security.redaction import MASK
 from dvf.sql.dialects import Dialect
 
 MAX_GROUPS = 10_000
@@ -334,6 +335,9 @@ class AggregateComparator(Comparator):
                     passed, diff, tol, shown_s, shown_t = _compare_metric(
                         agg, col, s_row.get(name), t_row.get(name), rows, float_rel
                     )
+                    if agg in ("min", "max") and _hide_values(ctx, col):
+                        shown_s = None if shown_s is None else MASK
+                        shown_t = None if shown_t is None else MASK
                     if not passed:
                         failures.append(f"{agg}({col.label})" + (f" for {group}" if group else ""))
                     if not groups or (not passed and len(metrics) < MAX_GROUP_METRICS):
@@ -394,6 +398,11 @@ def _profile_items(col: PlannedColumn, i: int, side: str, dialect: Dialect) -> l
             f"AVG({length}) AS a{i}_avg_length",
         ]
     return items
+
+
+def _hide_values(ctx: ComparisonContext, col: PlannedColumn) -> bool:
+    """Whether raw values of ``col`` (minimum, maximum) must stay out of results."""
+    return ctx.privacy.strict or (bool(col.pii) and ctx.privacy.mask_pii)
 
 
 def _profile(
@@ -471,6 +480,9 @@ class ProfileComparator(Comparator):
             sp = _profile(s_row, i, s_total, col, "source")
             tp = _profile(t_row, i, t_total, col, "target")
             diffs = _profile_differences(sp, tp, rel)
+            if _hide_values(ctx, col):
+                sp, tp = hide_profile(sp), hide_profile(tp)  # type: ignore[assignment]
+                diffs = hide_profile_differences(diffs)
             if diffs:
                 differing.append(col.label)
             profiles.append(
@@ -811,10 +823,10 @@ class FullDiffComparator(Comparator):
                                 ctx.privacy.mask(k, v)
                                 for k, v in zip(key_labels, raw[: len(key_labels)], strict=True)
                             ],
-                            "***"
+                            ctx.privacy.protect(raw[-3])
                             if col.pii and ctx.privacy.mask_pii
                             else ctx.privacy.mask(col.label, raw[-3]),
-                            "***"
+                            ctx.privacy.protect(raw[-2])
                             if col.pii and ctx.privacy.mask_pii
                             else ctx.privacy.mask(col.label, raw[-2]),
                             raw[-1],
@@ -891,8 +903,12 @@ def _mismatch_extract(ctx: ComparisonContext, job: DiffJob, result: DiffResult) 
             [
                 *[ctx.privacy.mask(k, v) for k, v in zip(key_labels, r.keys, strict=True)],
                 r.column,
-                "***" if hidden else ctx.privacy.mask(r.column, r.source_value),
-                "***" if hidden else ctx.privacy.mask(r.column, r.target_value),
+                ctx.privacy.protect(r.source_value)
+                if hidden
+                else ctx.privacy.mask(r.column, r.source_value),
+                ctx.privacy.protect(r.target_value)
+                if hidden
+                else ctx.privacy.mask(r.column, r.target_value),
                 classify_pair(r.source_value, r.target_value),
             ]
         )

@@ -1,0 +1,59 @@
+"""Tests of the ``{{name}}`` result sink.
+
+Run ``pytest`` after ``pip install -e ".[test]"``.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from dvf import api
+from dvf.plugins import PluginKind, new_registry
+
+from {{module}}.{{kind_module}} import {{class_name}}
+
+NAME = "{{name}}"
+
+
+def test_registered_through_its_entry_point() -> None:
+    registry = new_registry(load_entry_points=True)
+    assert registry.get(PluginKind.SINK, NAME).implementation is {{class_name}}
+    assert not registry.load_failures
+
+
+def test_appends_every_check_of_every_run(tmp_path: Path) -> None:
+    (tmp_path / "customers.csv").write_text("id,email\n1,a@example.com\n2,\n", encoding="utf-8")
+    config: dict[str, Any] = {
+        "version": 1,
+        "project": {"name": "plugin-test"},
+        "defaults": {"execution": {"checkpoints": False}},
+        "connections": {"files": {"type": "files", "path": "."}},
+        "suites": [
+            {
+                "name": "quality",
+                "source": "files",
+                "tables": [
+                    {
+                        "name": "customers",
+                        "source": {"path": "customers.csv"},
+                        "checks": [
+                            {"type": "not_null", "columns": ["email"]},
+                            {"type": "unique", "columns": ["id"]},
+                        ],
+                    }
+                ],
+            }
+        ],
+        "sinks": [{"type": NAME, "path": "results/checks.jsonl"}],
+    }
+    for _ in range(2):
+        loaded = api.load_config_data(config, base_dir=tmp_path)
+        result = api.run(loaded, write_reports=False, history=False).result
+    lines = (tmp_path / "results" / "checks.jsonl").read_text(encoding="utf-8").splitlines()
+    rows = [json.loads(line) for line in lines]
+    checks = len(list(result.iter_checks()))
+    assert len(rows) == 2 * checks
+    assert {row["status"] for row in rows} >= {"passed", "failed"}
+    assert {row["project"] for row in rows} == {"plugin-test"}

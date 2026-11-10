@@ -1,0 +1,84 @@
+# dvf data validation with the dvf GitHub Action. Documented in docs/ci.md.
+#
+# Copy this file to .github/workflows/dvf.yml and replace <owner>/dvf with the repository
+# that publishes the action. It runs:
+#
+#   PR mode       on pull requests: fast checks selected by tag:pr
+#   nightly mode  on the schedule below: full comparisons selected by tag:nightly
+#
+# Run a mode by hand from the Actions tab ("Run workflow"). The action appends summary.md to
+# the job summary, annotates failed checks, uploads the reports as an artifact, and fails the
+# job by the gates (fail-on, min-score). The optional steps below publish junit.xml as a check
+# run and post the summary as a pull request comment.
+#
+# Credentials: store them as repository or environment secrets, pass them as environment
+# variables, and reference them from the configuration with ${secret:env:NAME}.
+
+name: Data validation
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Validation mode
+        type: choice
+        options: [pr, nightly]
+        default: pr
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dvf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dvf:
+    name: dvf (${{ (github.event_name == 'schedule' || inputs.mode == 'nightly') && 'nightly' || 'pr' }} mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      checks: write # JUnit check run (optional step)
+      pull-requests: write # summary comment (optional step)
+    env:
+      DVF_MODE: ${{ (github.event_name == 'schedule' || inputs.mode == 'nightly') && 'nightly' || 'pr' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate
+        id: dvf
+        uses: <owner>/dvf@v1
+        with:
+          config: dvf.yaml
+          only: tag:${{ env.DVF_MODE }}
+          extras: postgres
+          fail-on: error
+          min-score: ${{ env.DVF_MODE == 'nightly' && '95' || '' }}
+          artifact-name: dvf-reports-${{ env.DVF_MODE }}
+        env:
+          WAREHOUSE_PASSWORD: ${{ secrets.WAREHOUSE_PASSWORD }}
+
+      # Optional: junit.xml as a check run with per-check results (a third-party action).
+      - name: Publish JUnit results
+        if: always() && steps.dvf.outputs.report-dir != ''
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: ${{ steps.dvf.outputs.report-dir }}/junit.xml
+          check_name: dvf ${{ env.DVF_MODE }}
+
+      # Optional: post or update the summary as a pull request comment.
+      - name: Comment on the pull request
+        if: always() && github.event_name == 'pull_request' && steps.dvf.outputs.report-dir != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SUMMARY: ${{ steps.dvf.outputs.report-dir }}/summary.md
+        run: |
+          test -f "$SUMMARY" || exit 0
+          gh pr comment "$PR" --edit-last --body-file "$SUMMARY" \
+            || gh pr comment "$PR" --body-file "$SUMMARY"

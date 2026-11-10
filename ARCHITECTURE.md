@@ -11,9 +11,9 @@ Significant decisions are recorded as ADRs in [docs/adr](docs/adr/README.md). Th
 | 1 | Local MVP: DuckDB, SQLite, PostgreSQL, files; core checks and comparisons; JSON, HTML, JUnit, Markdown reports | **Done** |
 | 2 | Scale and debugging: two-phase diffs, bucketed hashing, bisection, partitions, parallel executor, checkpoints and resume, explain/trace/debug/rerun, history, baselines, waivers, Excel, extracts, sinks, seven more connectors | **Done** |
 | 3 | Big data and specialized sources: Spark engine and connector, lakehouse and file formats, file checks, NoSQL and SAP packs, migration validations MIG-01 to MIG-14, in-pipeline `validate_dataframe`, discovery, mapping and contract import, profiling and suggestions | **Done** |
-| 4 | Integrations, containers, docs site, 1.0 release | Next |
+| 4 | Integrations and 1.0: Docker images, GitHub Action and CI templates, orchestrator integrations, notifications, OpenLineage, OpenTelemetry, secret providers, security hardening, generated reference docs, release pipeline, and the remaining catalog entries | **Done** (release not yet published) |
 
-Phase 1 executes configurations end to end; its execution model is in [ADR 0007](docs/adr/0007-phase1-execution-model.md). Phase 2 makes it scale and explain itself: two-phase diffs, checksum search, partitions, a parallel executor with per-connection caps, checkpoints, history, waivers, and debugging tools ([ADR 0008](docs/adr/0008-phase2-scale-and-debugging.md)). Phase 3 adds packs of components for Spark, files and lakehouse tables, NoSQL, SAP, migration validations, and discovery, staged connectors for systems without SQL, and in-pipeline validation ([ADR 0009](docs/adr/0009-phase3-big-data-and-specialized-sources.md)).
+Phase 1 executes configurations end to end; its execution model is in [ADR 0007](docs/adr/0007-phase1-execution-model.md). Phase 2 makes it scale and explain itself: two-phase diffs, checksum search, partitions, a parallel executor with per-connection caps, checkpoints, history, waivers, and debugging tools ([ADR 0008](docs/adr/0008-phase2-scale-and-debugging.md)). Phase 3 adds packs of components for Spark, files and lakehouse tables, NoSQL, SAP, migration validations, and discovery, staged connectors for systems without SQL, and in-pipeline validation ([ADR 0009](docs/adr/0009-phase3-big-data-and-specialized-sources.md)). Phase 4 adds integrations (CI, orchestrators, notifications, lineage, telemetry, secrets), containers, generated reference documentation, and the release pipeline; dvf is distributed on PyPI as `dvf-framework` ([ADR 0010](docs/adr/0010-phase4-integrations-and-release.md)).
 
 ## Design principles
 
@@ -50,11 +50,13 @@ flowchart LR
 | Core domain | `dvf.core` | 0 | Canonical type system, dataset and schema models, enums, errors |
 | Result model | `dvf.models.results` | 0 | Versioned run, suite, dataset, and check results |
 | Plugins | `dvf.plugins` | 0 | Registry, entry-point discovery, local plugin loading, pluggy hooks, built-in declarations |
-| Security | `dvf.security` | 0 | Secret providers, secret references, redaction |
+| Security | `dvf.security`, `dvf.packs.secrets` | 0, 4 | Secret references and providers (env, `.env`, keyring, Vault, AWS, Azure, Google Cloud, Databricks), redaction, PII detection and masking |
 | Observability | `dvf.observability` | 0 | Logging configuration, JSON logs, redaction filter |
 | Planning | `dvf.compare.plan`, `dvf.compare.partitions`, `dvf.execution.selectors` | 1–2 | Column pairing (keys, mappings, renames, include and exclude), comparison plans, pattern expansion, `--only` selectors (Phase 1); partitions (Phase 2) |
 | Discovery | `dvf.discovery` | 3 | `discover`, `import-mapping`, `import-contract` and `export-contract` (ODCS v3), `profile`, `suggest`, contract conformance |
-| Packs | `dvf.packs` | 3 | Self-registering groups of components: `spark`, `files`, `nosql`, `sap`, `migration`, `discovery` |
+| Packs | `dvf.packs` | 3–4 | Self-registering groups of components: `spark`, `files`, `nosql`, `sap`, `migration`, `discovery` (Phase 3); `integrations`, `secrets`, `catalog` (Phase 4) |
+| Integrations | `dvf.integrations`, `dvf.packs.integrations` | 4 | Orchestrator wrappers (Airflow, Dagster, Prefect, Databricks, AWS Glue), dbt manifest import; notifiers, OpenLineage events, OpenTelemetry spans, the triage interface |
+| Documentation | `dvf.docsgen` | 4 | Generates the configuration, components, results, and CLI reference pages (`nox -s docs_reference`) |
 | In-pipeline | `dvf.dataframes` | 3 | `validate_dataframe` and `foreach_batch_validator` over an in-process `dataframe` connection or the Spark session |
 | Execution | `dvf.execution` | 1–2 | Runner with error containment, run context, query recording, hooks (Phase 1); parallel executor with per-connection leases, checkpoints and resume, retries, waivers, history, extracts and repro files (Phase 2); pair checks, window and in-flight filters, named baselines and run comparison (Phase 3) |
 | Engines | `dvf.engines` | 1–3 | Two-phase row-level diff: `pushdown`, `duckdb`, `polars`, `auto` (Phases 1–2); `spark` (Phase 3) |
@@ -64,7 +66,7 @@ flowchart LR
 | Comparison | `dvf.compare` | 1–2 | Row count, aggregate, profile, row hash, full diff, mismatch classifier (Phase 1); checksum search for `hash_bucket` and `bisect` (Phase 2); `nested` child-row reconciliation (Phase 3, in the NoSQL pack) |
 | Checks | `dvf.checks`, packs | 1–3 | Schema checks SCH-01 to SCH-06 and data quality checks (Phase 1); pair checks, migration checks, file checks, contract and document schema checks (Phase 3) |
 | Reporting | `dvf.reporting` | 1–3 | JSON, HTML, JUnit, Markdown (Phase 1); Excel, waivers, baselines, trends (Phase 2); cutover sign-off (Phase 3) |
-| Sinks | `dvf.sinks` | 2 | DuckDB, SQLite, and PostgreSQL result tables |
+| Sinks | `dvf.sinks`, `dvf.packs.catalog` | 2, 4 | DuckDB, SQLite, PostgreSQL (Phase 2); Delta and beta Snowflake (Phase 4) result tables |
 | Debugging | `dvf.diagnose`, `dvf.debug` | 2 | `explain`, `trace`, loading earlier runs; `dvf.debug.load` is the notebook helper |
 
 ## Configuration pipeline
@@ -134,7 +136,7 @@ flowchart TB
 
 ## Security
 
-- Secrets are referenced, never written inline: `${secret:env:NAME}`, `${secret:dotenv:NAME}`, with cloud providers declared for later phases.
+- Secrets are referenced, never written inline: `${secret:<provider>:<path>#<key>}`. Providers: environment variables, `.env`, the OS keyring, HashiCorp Vault, AWS Secrets Manager, Azure Key Vault, Google Secret Manager, and Databricks secret scopes (pack `dvf.packs.secrets`); values are cached per run and redacted.
 - Every resolved secret value is added to a process-wide redactor. The logging filter and `dvf config show` scrub registered values and any field whose name suggests a credential.
 - `dvf validate-config` does not fetch secrets unless `--resolve-secrets` is given, so it is safe to run in CI.
 
@@ -142,6 +144,8 @@ flowchart TB
 
 ```
 src/dvf/          package (see the layer table)
+docker/           slim and full container images
+ci-templates/     GitLab, Azure DevOps, Jenkins, and GitHub Actions templates (action.yml at the root)
 tests/            unit/, parity/ (cross-engine canonicalization), e2e/ (seeded defects, resume), benchmarks/ (nox -s benchmark)
 examples/         runnable configuration examples
 schemas/          generated JSON Schemas for configuration and results

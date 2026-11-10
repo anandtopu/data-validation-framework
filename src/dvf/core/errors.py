@@ -74,7 +74,7 @@ class DependencyError(ExecutionError):
     def __init__(self, package: str, extra: str, purpose: str) -> None:
         super().__init__(
             f"{purpose} needs the '{package}' package, which is not installed.",
-            hint=f"Install it with: pip install 'dvf[{extra}]'",
+            hint=f"Install it with: pip install 'dvf-framework[{extra}]'",
         )
         self.package = package
         self.extra = extra

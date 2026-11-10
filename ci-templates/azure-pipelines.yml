@@ -1,0 +1,137 @@
+# dvf data validation for Azure DevOps Pipelines. Documented in docs/ci.md.
+#
+# Copy this file into your repository and create a pipeline from it. It runs:
+#
+#   PR mode       on pull requests (add this pipeline as a branch policy build validation),
+#                 with the fast checks selected by DVF_PR_ONLY (tag:pr)
+#   nightly mode  on the schedule below, with full comparisons selected by DVF_NIGHTLY_ONLY
+#
+# Run a mode by hand with "Run pipeline" and the mode parameter. Each run publishes junit.xml
+# to the Tests tab, summary.md to the run summary (Extensions tab), and the reports as a
+# pipeline artifact, then fails by the gates (DVF_FAIL_ON, DVF_MIN_SCORE).
+#
+# Credentials: keep them in a variable group linked to Azure Key Vault (or secret pipeline
+# variables), map them into the dvf step's env, and reference them from the configuration with
+# ${secret:env:NAME}. Secret variables are not passed to scripts unless mapped explicitly.
+
+trigger: none
+
+pr:
+  branches:
+    include:
+      - main
+
+schedules:
+  - cron: "0 2 * * *"
+    displayName: Nightly full validation
+    branches:
+      include:
+        - main
+    always: true
+
+parameters:
+  - name: mode
+    displayName: Validation mode
+    type: string
+    default: auto
+    values:
+      - auto     # nightly for scheduled runs, PR mode otherwise
+      - pr
+      - nightly
+
+variables:
+  DVF_VERSION: "1.0.0"
+  DVF_EXTRAS: "postgres"
+  DVF_CONFIG: "dvf.yaml"
+  DVF_PROFILE: ""
+  DVF_PR_ONLY: "tag:pr"
+  DVF_NIGHTLY_ONLY: "tag:nightly"
+  DVF_FAIL_ON: "error"
+  DVF_MIN_SCORE: ""
+  DVF_EXTRA_ARGS: ""
+  DVF_REPORT_DIR: "$(Build.ArtifactStagingDirectory)/dvf-reports"
+  # Set by the Run dvf step:
+  DVF_EXIT_CODE: ""
+  DVF_QUALITY_SCORE: ""
+  DVF_MODE_RESOLVED: "pr"
+
+pool:
+  vmImage: ubuntu-latest
+
+jobs:
+  - job: dvf
+    displayName: dvf validation
+    timeoutInMinutes: 240
+    steps:
+      - checkout: self
+
+      - task: UsePythonVersion@0
+        displayName: Use Python 3.12
+        inputs:
+          versionSpec: "3.12"
+
+      - bash: |
+          set -eo pipefail
+          spec="dvf-framework"
+          if [ -n "${DVF_EXTRAS:-}" ]; then spec="${spec}[${DVF_EXTRAS}]"; fi
+          if [ -n "${DVF_VERSION:-}" ]; then spec="${spec}==${DVF_VERSION}"; fi
+          python -m pip install --disable-pip-version-check "$spec"
+          dvf --version
+        displayName: Install dvf
+
+      - bash: |
+          set -o pipefail
+          set -f  # selectors are globs for dvf, not for the shell
+          mode="${{ parameters.mode }}"
+          if [ "$mode" = "auto" ]; then
+            if [ "$BUILD_REASON" = "Schedule" ]; then mode="nightly"; else mode="pr"; fi
+          fi
+          if [ "$mode" = "nightly" ]; then only="${DVF_NIGHTLY_ONLY:-}"; else only="${DVF_PR_ONLY:-}"; fi
+          set -- run "$DVF_CONFIG" --output-dir "$DVF_REPORT_DIR" --fail-on "$DVF_FAIL_ON" \
+            --format junit --format markdown --format html
+          for selector in $only; do set -- "$@" --only "$selector"; done
+          if [ -n "${DVF_PROFILE:-}" ]; then set -- "$@" --profile "$DVF_PROFILE"; fi
+          if [ -n "${DVF_MIN_SCORE:-}" ]; then set -- "$@" --min-score "$DVF_MIN_SCORE"; fi
+          for arg in ${DVF_EXTRA_ARGS:-}; do set -- "$@" "$arg"; done
+          echo "dvf $* ($mode mode)"
+          code=0
+          dvf "$@" || code=$?
+          echo "##vso[task.setvariable variable=DVF_EXIT_CODE]$code"
+          echo "##vso[task.setvariable variable=DVF_MODE_RESOLVED]$mode"
+          if [ -f "$DVF_REPORT_DIR/summary.md" ]; then
+            echo "##vso[task.uploadsummary]$DVF_REPORT_DIR/summary.md"
+          fi
+          if [ -f "$DVF_REPORT_DIR/results.json" ]; then
+            score="$(python -c 'import json,sys; s=json.load(open(sys.argv[1]))["summary"].get("quality_score"); print("" if s is None else s)' "$DVF_REPORT_DIR/results.json")"
+            echo "##vso[task.setvariable variable=DVF_QUALITY_SCORE]$score"
+            echo "##vso[build.addbuildtag]dvf-$mode"
+          fi
+          exit 0
+        displayName: Run dvf
+        # env:
+        #   WAREHOUSE_PASSWORD: $(WAREHOUSE_PASSWORD)   # map secret variables explicitly
+
+      - task: PublishTestResults@2
+        displayName: Publish JUnit results
+        condition: succeededOrFailed()
+        inputs:
+          testResultsFormat: JUnit
+          testResultsFiles: "$(DVF_REPORT_DIR)/junit.xml"
+          testRunTitle: "dvf $(DVF_MODE_RESOLVED)"
+          failTaskOnFailedTests: false
+
+      - task: PublishPipelineArtifact@1
+        displayName: Publish reports
+        condition: succeededOrFailed()
+        inputs:
+          targetPath: "$(DVF_REPORT_DIR)"
+          artifact: "dvf-reports-$(DVF_MODE_RESOLVED)-$(System.JobAttempt)"
+
+      - bash: |
+          score="${DVF_QUALITY_SCORE:-n/a}"
+          case "${DVF_EXIT_CODE:-}" in
+            0) echo "dvf passed its quality gates (quality score $score)" ;;
+            1) echo "##vso[task.logissue type=error]dvf quality gates failed (quality score $score)"; exit 1 ;;
+            *) echo "##vso[task.logissue type=error]dvf could not complete the run (exit code ${DVF_EXIT_CODE:-unknown})"; exit "${DVF_EXIT_CODE:-2}" ;;
+          esac
+        displayName: Apply quality gates

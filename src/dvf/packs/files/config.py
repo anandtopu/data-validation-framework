@@ -39,7 +39,9 @@ class FileCountCheck(FileCheckConfig):
     """The number of files must fall within a range."""
 
     min: NonNegativeInt | None = None
+    """Fewest files accepted; omit for no lower bound."""
     max: NonNegativeInt | None = None
+    """Most files accepted; omit for no upper bound."""
 
     @model_validator(mode="after")
     def _bounds(self) -> FileCountCheck:
@@ -71,7 +73,9 @@ class FileSizeCheck(FileCheckConfig):
     """File sizes must fall within a range; empty files fail unless allowed."""
 
     min_bytes: NonNegativeInt | None = None
+    """Smallest accepted file size in bytes; omit for no lower bound."""
     max_bytes: PositiveInt | None = None
+    """Largest accepted file size in bytes; omit for no upper bound."""
     allow_empty: bool = False
     """Accept zero-byte files (they fail by default, even without ``min_bytes``)."""
 
@@ -100,6 +104,8 @@ class FileChecksumCheck(FileCheckConfig):
     or the files of another dataset (file-vs-file reconciliation)."""
 
     algorithm: Literal["md5", "sha256"] = "sha256"
+    """Digest algorithm. Files are hashed as stored, so a compressed file's digest is that of its
+    compressed bytes."""
     expected: dict[str, str] = Field(default_factory=dict)
     """Expected digests by file: a file name, a path relative to the connection's folder, or a
     glob."""
@@ -155,6 +161,7 @@ class ControlField(StrictModel):
     start: PositiveInt
     """Position of the first character, starting at 1."""
     width: PositiveInt
+    """Number of characters the value occupies."""
     scale: NonNegativeInt = 0
     """Implied decimal places: ``000012345`` with scale 2 is 123.45."""
 
@@ -193,7 +200,9 @@ class ControlTotalsCheck(FileCheckConfig):
     """Header or trailer control records (record counts, column sums) must match the data."""
 
     header: ControlRecord | None = None
+    """Header control record: which line holds it and how to read its values."""
     trailer: ControlRecord | None = None
+    """Trailer control record: which line holds it and how to read its values."""
     record_count: str | None = None
     """Name of the control value holding the number of data records."""
     sums: dict[str, str] = Field(default_factory=dict)
@@ -230,6 +239,7 @@ class SchemaColumn(StrictModel):
     """An expected column."""
 
     name: str = Field(min_length=1)
+    """Expected column name, compared case-insensitively unless ``case_sensitive`` is set."""
     type: str | None = None
     """Expected type in SQL terms (``INTEGER``, ``DECIMAL(12,2)``, ``VARCHAR``, ``DATE``,
     ``TIMESTAMP``); omit to accept any type."""

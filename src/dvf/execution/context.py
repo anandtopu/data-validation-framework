@@ -105,7 +105,11 @@ class ConnectorPool:
             raise ConnectorError(f"Unknown connection '{name}'.")
         entry = self._registry.get(PluginKind.CONNECTOR, conn_config.type)
         if not entry.ready:
-            extra = f" It is planned with 'pip install dvf[{entry.extra}]'." if entry.extra else ""
+            extra = (
+                f" It is planned with 'pip install dvf-framework[{entry.extra}]'."
+                if entry.extra
+                else ""
+            )
             raise ConnectorError(
                 f"Connector type '{conn_config.type}' (connection '{name}') is declared but not "
                 f"implemented in this version.{extra}",

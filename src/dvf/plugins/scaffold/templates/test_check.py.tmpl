@@ -1,0 +1,39 @@
+"""Tests of the ``{{name}}`` check.
+
+Run ``pytest`` after ``pip install -e ".[test]"``.
+"""
+
+from __future__ import annotations
+
+import dvf
+import pyarrow as pa
+from dvf.models import Status
+from dvf.plugins import PluginKind, new_registry
+
+from {{module}}.{{kind_module}} import {{class_name}}
+
+NAME = "{{name}}"
+
+
+def test_registered_through_its_entry_point() -> None:
+    registry = new_registry(load_entry_points=True)
+    entry = registry.get(PluginKind.CHECK, NAME)
+    assert entry.implementation is {{class_name}}
+    assert not registry.load_failures
+
+
+def test_invalid_values_fail_and_are_quarantined() -> None:
+    table = pa.table({"id": [1, 2, 3, 4], "code": ["AB12", "CD34", "bad value", None]})
+    output = dvf.validate_dataframe(table, [{"type": NAME, "column": "code"}])
+    (check,) = output.result.checks
+    assert check.status is Status.FAILED
+    assert check.unexpected_count == 1
+    assert output.quarantine.column("code").to_pylist() == ["bad value"]
+    assert output.valid.num_rows == 3
+
+
+def test_pattern_and_mostly_settings() -> None:
+    table = pa.table({"code": ["a-1", "b-2", "c-3", "oops"]})
+    checks = [{"type": NAME, "column": "code", "pattern": "^[a-z]-[0-9]$", "mostly": 0.7}]
+    output = dvf.validate_dataframe(table, checks)
+    assert output.result.checks[0].status is Status.PASSED

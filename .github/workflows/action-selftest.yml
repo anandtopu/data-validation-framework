@@ -1,0 +1,133 @@
+name: Action self-test
+
+# Runs the GitHub Action in this repository (action.yml) on the seeded example, installing dvf
+# from the checkout instead of PyPI. The example data has defects on purpose, so a run with the
+# default gate exits 1; the checks below assert the action's outputs, reports, and gates.
+
+on:
+  pull_request:
+    paths:
+      - action.yml
+      - .github/workflows/action-selftest.yml
+      - examples/ci/**
+      - examples/local_files/**
+      - src/dvf/reporting/**
+      - src/dvf/cli/**
+  push:
+    branches: [main]
+    paths:
+      - action.yml
+      - .github/workflows/action-selftest.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: action-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  modes:
+    name: ${{ matrix.mode }} mode (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        mode: [pr, nightly]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # hatch-vcs reads the version from git
+
+      - name: Run the action (gates reported, step not failed)
+        id: dvf
+        uses: ./
+        with:
+          config: examples/ci/dvf.yaml
+          only: tag:${{ matrix.mode }}
+          install-from: .
+          fail-step: "false"
+          artifact-name: dvf-selftest-${{ matrix.os }}-${{ matrix.mode }}
+          retention-days: "3"
+
+      - name: Check the outputs and reports
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+          CODE: ${{ steps.dvf.outputs.exit-code }}
+          PASSED: ${{ steps.dvf.outputs.passed }}
+          STATUS: ${{ steps.dvf.outputs.status }}
+          SCORE: ${{ steps.dvf.outputs.quality-score }}
+          RUN_ID: ${{ steps.dvf.outputs.run-id }}
+          RESULTS: ${{ steps.dvf.outputs.results-path }}
+          REPORT_DIR: ${{ steps.dvf.outputs.report-dir }}
+          VERSION: ${{ steps.dvf.outputs.dvf-version }}
+        run: |
+          set -euo pipefail
+          echo "dvf $VERSION: exit $CODE, passed $PASSED, status $STATUS, score $SCORE, run $RUN_ID"
+          test "$CODE" = "1"          # seeded defects fail the default gate (--fail-on error)
+          test "$PASSED" = "false"
+          test "$STATUS" = "failed"
+          test -n "$SCORE" && test -n "$RUN_ID" && test -n "$VERSION"
+          for file in results.json junit.xml summary.md report.html; do
+            test -f "$REPORT_DIR/$file"
+          done
+          test -f "$RESULTS"
+          python - "$RESULTS" "$MODE" <<'PY'
+          import json
+          import sys
+
+          results, mode = sys.argv[1], sys.argv[2]
+          data = json.load(open(results, encoding="utf-8"))
+          types = {c["type"] for s in data["suites"] for d in s["datasets"] for c in d["checks"]}
+          row_level = {"compare.row_hash", "compare.hash_bucket"}
+          if mode == "pr":
+              assert not types & row_level, f"PR mode ran row-level comparisons: {types & row_level}"
+              assert {"compare.row_count", "compare.aggregate"} <= types, types
+          else:
+              assert row_level <= types, f"nightly mode is missing {row_level - types}"
+          print(f"{mode} mode ran: {sorted(types)}")
+          PY
+
+      - name: Run the action with a gate the example passes
+        id: lenient
+        uses: ./
+        with:
+          config: examples/ci/dvf.yaml
+          only: tag:${{ matrix.mode }}
+          install-from: .
+          fail-on: critical # every failing check is severity error or warning
+          output-dir: dvf-reports-lenient
+          upload-artifact: "false"
+          step-summary: "false"
+
+      - name: Check that the lenient gate passed
+        shell: bash
+        env:
+          CODE: ${{ steps.lenient.outputs.exit-code }}
+          PASSED: ${{ steps.lenient.outputs.passed }}
+        run: test "$CODE" = "0" && test "$PASSED" = "true"
+
+      - name: Run the action with a failing gate (the step must fail)
+        id: strict
+        continue-on-error: true
+        uses: ./
+        with:
+          config: examples/ci/dvf.yaml
+          only: tag:${{ matrix.mode }}
+          install-from: .
+          fail-on: critical
+          min-score: "99"
+          output-dir: dvf-reports-strict
+          upload-artifact: "false"
+          step-summary: "false"
+          annotations: "false"
+
+      - name: Check that the failing gate failed the step
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.strict.outcome }}
+          CODE: ${{ steps.strict.outputs.exit-code }}
+        run: test "$OUTCOME" = "failure" && test "$CODE" = "1"

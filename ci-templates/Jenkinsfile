@@ -1,0 +1,125 @@
+// dvf data validation for Jenkins (declarative pipeline). Documented in docs/ci.md.
+//
+// Use it in a multibranch pipeline (pull requests run PR mode) with the cron trigger below on
+// the main branch (nightly mode). Build with parameters to choose a mode by hand.
+//
+//   PR mode       change requests and manual runs: fast checks selected by DVF_PR_ONLY (tag:pr)
+//   nightly mode  timer-triggered builds: full comparisons selected by DVF_NIGHTLY_ONLY
+//
+// Each build publishes junit.xml (JUnit plugin), archives the reports, prints summary.md in
+// the log and sets the build description to the quality score, then applies the gates
+// (DVF_FAIL_ON, DVF_MIN_SCORE): a failed gate marks the build FAILURE (or UNSTABLE with
+// DVF_GATE_RESULT=UNSTABLE). The agent needs Python 3.11 or later (here: a python image).
+//
+// Credentials: store them in Jenkins credentials, expose them with withCredentials (see the
+// commented example), and reference them from the configuration with ${secret:env:NAME}.
+
+pipeline {
+    agent {
+        docker { image 'python:3.12-slim' }
+    }
+
+    parameters {
+        choice(name: 'DVF_MODE', choices: ['auto', 'pr', 'nightly'],
+               description: 'auto: nightly for timer-triggered builds, PR mode otherwise')
+    }
+
+    triggers {
+        // Nightly full validation on the main branch only.
+        cron(env.BRANCH_NAME == 'main' ? 'H 2 * * *' : '')
+    }
+
+    options {
+        timeout(time: 4, unit: 'HOURS')
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+    }
+
+    environment {
+        DVF_VERSION = '1.0.0'
+        DVF_EXTRAS = 'postgres'
+        DVF_CONFIG = 'dvf.yaml'
+        DVF_PROFILE = ''
+        DVF_PR_ONLY = 'tag:pr'
+        DVF_NIGHTLY_ONLY = 'tag:nightly'
+        DVF_FAIL_ON = 'error'
+        DVF_MIN_SCORE = ''
+        DVF_EXTRA_ARGS = ''
+        DVF_REPORT_DIR = 'dvf-reports'
+        DVF_GATE_RESULT = 'FAILURE'   // or UNSTABLE
+        PIP_CACHE_DIR = "${env.WORKSPACE}/.cache/pip"
+    }
+
+    stages {
+        stage('Install dvf') {
+            steps {
+                sh '''
+                    set -e
+                    python -m venv .dvf-venv
+                    spec="dvf-framework"
+                    if [ -n "$DVF_EXTRAS" ]; then spec="${spec}[${DVF_EXTRAS}]"; fi
+                    if [ -n "$DVF_VERSION" ]; then spec="${spec}==${DVF_VERSION}"; fi
+                    .dvf-venv/bin/python -m pip install --disable-pip-version-check "$spec"
+                    .dvf-venv/bin/dvf --version
+                '''
+            }
+        }
+
+        stage('Validate') {
+            steps {
+                script {
+                    def timer = !currentBuild.getBuildCauses('hudson.triggers.TimerTrigger$TimerTriggerCause').isEmpty()
+                    def nightly = params.DVF_MODE == 'nightly' || (params.DVF_MODE == 'auto' && timer)
+                    env.DVF_MODE_RESOLVED = nightly ? 'nightly' : 'pr'
+                    env.DVF_ONLY = nightly ? env.DVF_NIGHTLY_ONLY : env.DVF_PR_ONLY
+                    // withCredentials([string(credentialsId: 'warehouse-password', variable: 'WAREHOUSE_PASSWORD')]) {
+                    def code = sh(returnStatus: true, script: '''
+                        set -f  # selectors are globs for dvf, not for the shell
+                        set -- run "$DVF_CONFIG" --output-dir "$DVF_REPORT_DIR" --fail-on "$DVF_FAIL_ON" \
+                          --format junit --format markdown --format html
+                        for selector in $DVF_ONLY; do set -- "$@" --only "$selector"; done
+                        if [ -n "$DVF_PROFILE" ]; then set -- "$@" --profile "$DVF_PROFILE"; fi
+                        if [ -n "$DVF_MIN_SCORE" ]; then set -- "$@" --min-score "$DVF_MIN_SCORE"; fi
+                        for arg in $DVF_EXTRA_ARGS; do set -- "$@" "$arg"; done
+                        echo "dvf $* ($DVF_MODE_RESOLVED mode)"
+                        .dvf-venv/bin/dvf "$@"
+                    ''')
+                    // }
+                    env.DVF_EXIT_CODE = code.toString()
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            junit testResults: "${env.DVF_REPORT_DIR}/junit.xml", allowEmptyResults: true
+            archiveArtifacts artifacts: "${env.DVF_REPORT_DIR}/**", allowEmptyArchive: true
+            script {
+                def summaryFile = "${env.DVF_REPORT_DIR}/summary.md"
+                if (fileExists(summaryFile)) {
+                    echo readFile(summaryFile)
+                }
+                def resultsFile = "${env.DVF_REPORT_DIR}/results.json"
+                if (fileExists(resultsFile)) {
+                    def score = sh(returnStdout: true, script: """
+                        .dvf-venv/bin/python -c 'import json,sys; s=json.load(open(sys.argv[1]))["summary"].get("quality_score"); print("n/a" if s is None else s)' '${resultsFile}'
+                    """).trim()
+                    currentBuild.description = "dvf ${env.DVF_MODE_RESOLVED}: quality score ${score}"
+                }
+                // Optional, with the HTML Publisher plugin:
+                // publishHTML(target: [reportDir: env.DVF_REPORT_DIR, reportFiles: 'report.html',
+                //                      reportName: 'dvf report', keepAll: true, allowMissing: true])
+                def code = (env.DVF_EXIT_CODE ?: '2') as Integer
+                if (code == 1) {
+                    if (env.DVF_GATE_RESULT == 'UNSTABLE') {
+                        unstable('dvf quality gates failed')
+                    } else {
+                        error('dvf quality gates failed')
+                    }
+                } else if (code != 0) {
+                    error("dvf could not complete the run (exit code ${code})")
+                }
+            }
+        }
+    }
+}

@@ -2,12 +2,19 @@
 
 **Configuration-driven data and schema validation for data migrations and data engineering.**
 
+<!-- Replace OWNER/REPOSITORY once the GitHub repository exists (see docs/releasing.md). -->
+[![CI](https://github.com/OWNER/REPOSITORY/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/OWNER/REPOSITORY/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/dvf-framework)](https://pypi.org/project/dvf-framework/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Docs](https://github.com/OWNER/REPOSITORY/actions/workflows/docs.yml/badge.svg)](https://OWNER.github.io/REPOSITORY/)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/OWNER/REPOSITORY/badge)](https://scorecard.dev/viewer/?uri=github.com/OWNER/REPOSITORY)
+
 `dvf` validates schemas and data quality, reconciles source and target datasets at scale, and produces detailed, auditable reports. It is built for migration projects (SAP, on-premise databases to cloud warehouses, SQL to NoSQL) and for data engineering pipelines (PySpark, Databricks, Parquet, Avro, JSON, CSV).
 
-> **Project status: Phase 3 (big data and specialized sources), pre-alpha.**
-> dvf checks and compares data in files and lakehouse tables, relational databases, MongoDB, and Spark, scales to large tables with bucketed checksums and parallel execution, explains every failure, covers the migration checklist (MIG-01 to MIG-14), and validates DataFrames inside pipelines.
-> Docker images, CI templates, orchestrator examples, notifications, and the 1.0 release arrive in Phase 4.
-> See [ARCHITECTURE.md](ARCHITECTURE.md) for the roadmap and [BUILD_PROMPT.md](BUILD_PROMPT.md) for the full specification.
+> **Project status: 1.0 release candidate (all four phases built).**
+> dvf checks and compares data in files and lakehouse tables, relational databases, MongoDB, and Spark, scales to large tables with bucketed checksums and parallel execution, explains every failure, covers the migration checklist (MIG-01 to MIG-14), validates DataFrames inside pipelines, and runs in CI, containers, and orchestrators.
+> It is published on PyPI as **`dvf-framework`** (the import package and the command are `dvf`). The first release has not been published yet.
+> See [ARCHITECTURE.md](ARCHITECTURE.md), the [ROADMAP](ROADMAP.md), and [BUILD_PROMPT.md](BUILD_PROMPT.md) for the full specification.
 
 ## What works today
 
@@ -23,6 +30,9 @@
 | `dvf discover`, `dvf import-mapping`, `dvf import-contract` | Generates a configuration from two databases' metadata, a source-to-target mapping sheet, or an ODCS v3 contract |
 | `dvf profile <file>`, `dvf suggest <file>` | Profiles columns, and proposes checks with the evidence for each |
 | `dvf baseline capture <file>`, `dvf history compare <a> <b>` | Captures pre-migration metrics; compares two rehearsal runs |
+| `dvf plan <file>`, `dvf schema-diff <file>`, `dvf waivers list <file>` | Shows the plan, compares schemas without running checks, lists waivers with their expiry |
+| `dvf plugin new <kind> <name>`, `dvf config migrate <file>` | Scaffolds a plugin package with tests; upgrades a configuration to the current version |
+| `dvf notify test <file>`, `dvf dbt import <manifest>` | Sends a test notification; generates a configuration from a dbt manifest |
 | `dvf report --from results.json -f html -o <dir>` | Re-renders reports from a results document, without touching data |
 | `dvf connections test <file>` | Opens every connection and runs a trivial query |
 | `dvf validate-config <file>` | Validates a configuration, reporting errors with file, line, and column |
@@ -32,8 +42,8 @@
 
 | Area | Ready |
 |---|---|
-| Connectors | `duckdb`, `sqlite`, `files` (CSV, TSV, Parquet, JSON, NDJSON, ORC, Avro, Excel, fixed width, XML, Delta Lake, Iceberg), `postgres`, `mssql`, `oracle`, `mysql`, `mongodb`, `spark` (each with its pip extra, for example `pip install 'dvf[mssql]'`); beta: `snowflake`, `bigquery`, `redshift`, `databricks`, `cassandra`, `dynamodb`, `cosmos`, `sap_hana`, `sap_rfc` |
-| Engines | `auto`, `pushdown` (diff inside one database), `duckdb` (local, spills to disk, memory limit), `polars` (`dvf[polars]`), `spark` (`dvf[spark]`); full diffs fetch values only for rows that differ |
+| Connectors | `duckdb`, `sqlite`, `files` (CSV, TSV, Parquet, JSON, NDJSON, ORC, Avro, Excel, fixed width, XML, Delta Lake, Iceberg), `postgres`, `mssql`, `oracle`, `mysql`, `mongodb`, `spark` (each with its pip extra, for example `pip install 'dvf-framework[mssql]'`); beta: `snowflake`, `bigquery`, `redshift`, `databricks`, `cassandra`, `dynamodb`, `cosmos`, `sap_hana`, `sap_rfc` |
+| Engines | `auto`, `pushdown` (diff inside one database), `duckdb` (local, spills to disk, memory limit), `polars` (`dvf-framework[polars]`), `spark` (`dvf-framework[spark]`); full diffs fetch values only for rows that differ |
 | Schema checks | Object existence, column presence, type compatibility, length and precision, nullability, constraints (SCH-01 to SCH-06), contract conformance (SCH-12), document schemas (SCH-13) |
 | Data quality checks | `not_null`, `not_blank`, `null_ratio`, `unique`, `regex`, `allowed_values`, `range`, `length`, `referential_integrity`, `custom_sql`, `expression`, `row_count_range`, `freshness`; file checks (`file_exists`, `file_checksum`, `control_totals`, `bad_records`, and more) |
 | Migration checks | MIG-01 to MIG-14: scope reconciliation, delta windows and CDC, idempotency, SCD Type 2, deletes, key maps, audit columns, cutover sign-off, in-flight windows, character sets, DST edge cases, sentinel substitutions, business parity, baselines |
@@ -41,33 +51,29 @@
 | SAP | Normalizers `sap_alpha`, `sap_matnr_length`, `sap_dats`, `sap_tims`, `sap_bool`, `sap_curr`, `sap_quan`, `sap_numc`, `sap_spras`; DDIC schemas; business object templates |
 | In-pipeline | `dvf.validate_dataframe(df, checks, on_fail="quarantine")` for pandas, Polars, Arrow, and Spark, with `foreachBatch` support |
 | Execution | Parallel tables with per-connection caps, checkpoints and resume, retries, waivers, run history with baselines and trends |
-| Reports | Self-contained HTML, canonical JSON, JUnit XML, Markdown, Excel (`dvf[excel]`), cutover sign-off; extracts and repro files per failed check; result sinks (DuckDB, SQLite, PostgreSQL) |
+| Reports | Self-contained HTML, canonical JSON, JUnit XML, Markdown, Excel (`dvf-framework[excel]`), cutover sign-off; extracts and repro files per failed check; result sinks (DuckDB, SQLite, PostgreSQL, Delta, beta Snowflake) |
+| Integrations | GitHub Action, GitLab, Azure DevOps, and Jenkins templates; Airflow, Dagster, Prefect, Databricks, AWS Glue, and dbt; Slack, Teams, email, and webhook notifications; OpenLineage and OpenTelemetry; Docker images |
+| Security | Secret providers (Vault, keyring, AWS, Azure, Google Cloud, Databricks), PII detection and masking, strict privacy mode, read-only sessions |
 
 Exit codes: `0` passed, `1` validation failures (at or above `--fail-on`, or below `--min-score`), `2` execution errors or an interrupted run, `3` configuration errors.
 
-## Quickstart (from source)
+## Quickstart
 
-Requires Python 3.11 or later and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.11 or later. Once the first release is on PyPI:
 
 ```bash
-git clone <repository-url> dvf
+pip install dvf-framework
 ```
 
 ```bash
-cd dvf
+dvf init demo --example
 ```
 
 ```bash
-uv sync
+dvf run demo/dvf.yaml
 ```
 
-```bash
-uv run dvf init demo --example
-```
-
-```bash
-uv run dvf run demo/dvf.yaml
-```
+Add extras for your systems, for example `pip install 'dvf-framework[postgres,mssql]'`, or use the container images (`ghcr.io/OWNER/dvf:latest`, slim, and `ghcr.io/OWNER/dvf:latest-full`); see [docs/installation.md](docs/installation.md). From a source checkout, run `uv sync` and prefix the commands with `uv run`.
 
 The run finds the seeded defects (exit code 1) and writes `report.html`, `results.json`, `junit.xml`, and `summary.md` under `demo/reports/`. Each mismatched column is classified, for example as `whitespace_only`, `numeric_rounding`, or `timezone_shift`, with a suggested fix.
 

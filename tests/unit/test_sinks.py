@@ -537,7 +537,7 @@ def test_postgres_sink_config_and_dependency_errors(monkeypatch: pytest.MonkeyPa
     sink = PostgresSink(_config("postgres", url=URL), Path.cwd())  # no import until writing
     with pytest.raises(DependencyError, match="psycopg") as info:
         sink.write(build_run())
-    assert "dvf[postgres]" in (info.value.hint or "")
+    assert "dvf-framework[postgres]" in (info.value.hint or "")
 
 
 def test_postgres_sink_batches(monkeypatch: pytest.MonkeyPatch) -> None:

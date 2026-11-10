@@ -1,0 +1,80 @@
+"""Tests of the ``{{name}}`` normalizer.
+
+Run ``pytest`` after ``pip install -e ".[test]"``.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import duckdb
+import pytest
+from dvf import api
+from dvf.models import CanonicalType, LogicalType, Status
+from dvf.plugins import PluginKind, new_registry
+
+from {{module}}.{{kind_module}} import {{class_name}}
+
+NAME = "{{name}}"
+TEXT = CanonicalType(logical=LogicalType.STRING)
+SAMPLES = ["555-0100", "DE89 3704 0044", "plain", "", "it's - ok"]
+
+
+def test_registered_through_its_entry_point() -> None:
+    registry = new_registry(load_entry_points=True)
+    assert registry.get(PluginKind.NORMALIZER, NAME).implementation is {{class_name}}
+    assert not registry.load_failures
+
+
+@pytest.mark.parametrize("params", [{}, {"characters": "' "}])
+def test_sql_matches_the_python_reference(params: dict[str, Any]) -> None:
+    normalizer = {{class_name}}(params)
+    for value in SAMPLES:
+        quoted = "'" + value.replace("'", "''") + "'"
+        (sql_value,) = duckdb.sql(f"SELECT {normalizer.to_sql(quoted, None, TEXT)}").fetchone()
+        assert sql_value == normalizer.to_python(value, TEXT)
+    assert normalizer.to_python(None, TEXT) is None
+
+
+def test_only_text_columns_change() -> None:
+    normalizer = {{class_name}}()
+    assert normalizer.applies_to(TEXT)
+    assert not normalizer.applies_to(CanonicalType(logical=LogicalType.INTEGER))
+
+
+def _run(folder: Path, normalize: list[Any]) -> Status:
+    # Text on both sides: "+1 555-0100" was stored as "+15550100".
+    (folder / "old.csv").write_text("id,phone\n1,+1 555-0100\n2,+1 555 0101\n", encoding="utf-8")
+    (folder / "new.csv").write_text("id,phone\n1,+15550100\n2,+15550101\n", encoding="utf-8")
+    mapping = {"source": "phone", "target": "phone", "normalize": normalize}
+    config = {
+        "version": 1,
+        "project": {"name": "plugin-test"},
+        "defaults": {"execution": {"checkpoints": False}},
+        "connections": {"files": {"type": "files", "path": "."}},
+        "suites": [
+            {
+                "name": "phones",
+                "source": "files",
+                "target": "files",
+                "tables": [
+                    {
+                        "name": "contacts",
+                        "source": {"path": "old.csv"},
+                        "target": {"path": "new.csv"},
+                        "keys": ["id"],
+                        "columns": {"mappings": [mapping]},
+                        "comparison": {"strategies": ["row_count", "full_diff"]},
+                    }
+                ],
+            }
+        ],
+    }
+    loaded = api.load_config_data(config, base_dir=folder)
+    return api.run(loaded, write_reports=False, history=False).result.status
+
+
+def test_comparison_passes_only_with_the_normalizer(tmp_path: Path) -> None:
+    assert _run(tmp_path, []) is Status.FAILED
+    assert _run(tmp_path, [NAME]) is Status.PASSED

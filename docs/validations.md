@@ -89,7 +89,18 @@ Two more schema validations are check types, listed under `checks:`:
 | `contract` | SCH-12 | the dataset's schema differs from an ODCS v3 contract or an expected-schema file ([Discovery](discovery.md)) |
 | `document_schema` | SCH-13 | sampled documents lack expected fields, hold unexpected types, or fall below a presence threshold ([NoSQL](nosql.md)) |
 
-SCH-07 to SCH-11 and SCH-14 are not implemented yet.
+These schema checks are off by default; list them under `schema_checks` and configure them with `schema_options` ([details](catalog-additions.md#schema-checks-sch-07-to-sch-11-and-sch-14)):
+
+| Check | ID | Result |
+|---|---|---|
+| `physical_design` | SCH-07 | Informational: source indexes with no matching target index, unique indexes not unique in the target, partitioning on one side only; clustering, distribution, and sort keys side by side |
+| `column_order` | SCH-08 | Fails when paired columns are in a different order |
+| `collation` | SCH-09 | Fails when a paired text column compares differently (case or accent sensitivity) or the target cannot store every character the source can |
+| `object_inventory` | SCH-10 | Informational: views, procedures, functions, triggers, sequences, and synonyms of the source schema with no target counterpart |
+| `schema_drift` | SCH-11 | Fails when columns, types, nullability, or the primary key changed since the previous run or a committed baseline |
+| `naming_standards` | SCH-14 | Fails when table or column names break the configured rules (patterns, presets such as `snake_case`, maximum length) |
+
+`physical_design`, `collation`, and `object_inventory` read the database catalog (DuckDB, SQLite, PostgreSQL, MySQL, SQL Server, Oracle, and `sqlalchemy` or `odbc` connections to them); elsewhere they report `skipped`.
 
 ## Comparisons
 
@@ -118,6 +129,7 @@ comparison:
 | `hash_bucket` | REC-03, REC-04 | bucket checksums inside each database, drilling into differing buckets; only their rows are diffed |
 | `bisect` | REC-03, REC-06 | the same over ranges of an integer key, so databases can use an index on the key |
 | `full_diff` | REC-03, REC-05 | keys, per-column mismatch counts and percentages, side-by-side samples, and classification |
+| `sample` | REC-07 | a seeded-hash sample by key (the same keys on both sides, in every dialect), sized by margin of error and confidence (Cochran), a fraction, or a number of rows, optionally stratified; reports the estimated mismatch rate with a confidence interval and extrapolated counts ([details](catalog-additions.md#sample-comparison-rec-07)) |
 | `nested` | REC-10 | child rows per parent key (`group_by`): counts, totals, and an order-independent hash of the child rows, for example embedded arrays against a child table ([NoSQL](nosql.md)) |
 
 `row_hash` (and `full_diff`) compare every row: the local engine moves each row's key and hash. Use `hash_bucket` or `bisect` for large tables in different databases that are mostly identical: rows moved grow with the number of differences, not with the table size. When `full_diff` follows any of them, only the differing rows' values are fetched.
@@ -212,7 +224,7 @@ Each mismatched value is labeled, and the dominant labels per column produce a h
 | `auto` (default) | `pushdown` when source and target share a connection, `spark` when both are Spark datasets in one Spark application, otherwise `duckdb` |
 | `pushdown` | Inside the database; requires both datasets on the same connection |
 | `duckdb` | Each side is canonicalized in its own database and streamed into a local DuckDB that spills to disk |
-| `polars` | Raw values are fetched and canonicalized and diffed with Polars (`pip install 'dvf[polars]'`) |
+| `polars` | Raw values are fetched and canonicalized and diffed with Polars (`pip install 'dvf-framework[polars]'`) |
 | `spark` | Spark datasets are projected in Spark SQL; other sides are staged as Parquet and read by Spark, which runs the diff ([Spark](spark.md)) |
 
 Full diffs run in two phases: keys and row hashes of every row first, then the full values of only the rows that differ. Duplicate keys are probed with a cheap query, and de-duplication runs only when a key repeats. `defaults.execution.memory_limit` (for example `4GB`), `threads`, and `temp_dir` bound the local DuckDB engine, which spills to disk beyond its memory limit.

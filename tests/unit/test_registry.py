@@ -42,7 +42,7 @@ def test_builtins_are_declared(registry: Registry) -> None:
     assert entry.origin == "builtin"
     assert registry.get(PluginKind.SECRET_PROVIDER, "env").ready
     assert registry.get(PluginKind.SECRET_PROVIDER, "dotenv").ready
-    assert not registry.get(PluginKind.SECRET_PROVIDER, "azurekv").ready
+    assert registry.get(PluginKind.SECRET_PROVIDER, "azurekv").status == "beta"
     assert registry.get(PluginKind.CONNECTOR, "snowflake").extra == "snowflake"
     kinds = {e.kind for e in registry.entries()}
     assert kinds == set(PluginKind)

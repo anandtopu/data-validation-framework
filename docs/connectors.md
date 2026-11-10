@@ -10,26 +10,28 @@ Proprietary drivers are never bundled: install the extra for the systems you use
 
 | Type | Systems | Install | Status | Time travel (`as_of`) |
 |---|---|---|---|---|
-| `files` | CSV, TSV, Parquet, JSON, NDJSON, ORC, Avro, Excel, fixed width, XML, Delta Lake, Iceberg; gz, zst, bz2, xz; Hive-partitioned folders; local, or object storage through fsspec or DuckDB extensions ([details](files.md)) | included (`dvf[delta]`, `dvf[iceberg]`, `dvf[avro]`, `dvf[excel]` for those formats) | ready | Delta (version or timestamp), Iceberg (snapshot or timestamp) |
+| `files` | CSV, TSV, Parquet, JSON, NDJSON, ORC, Avro, Excel, fixed width, XML, Delta Lake, Iceberg; gz, zst, bz2, xz; Hive-partitioned folders; local, or object storage through fsspec or DuckDB extensions ([details](files.md)) | included (`dvf-framework[delta]`, `dvf-framework[iceberg]`, `dvf-framework[avro]`, `dvf-framework[excel]` for those formats) | ready | Delta (version or timestamp), Iceberg (snapshot or timestamp) |
 | `duckdb` | DuckDB, in memory or on disk | included | ready | no |
 | `sqlite` | SQLite files | included | ready | no |
-| `postgres` | PostgreSQL 13+ and compatible | `dvf[postgres]` | ready | no |
-| `mssql` | SQL Server 2019+, Azure SQL (verified with SQL Server 2022) | `dvf[mssql]` | ready | `FOR SYSTEM_TIME AS OF` (temporal tables) |
-| `oracle` | Oracle Database (verified with 23ai Free; thin mode, no client libraries) | `dvf[oracle]` | ready | `AS OF TIMESTAMP` (Flashback) |
-| `mysql` | MySQL 8.0.17+ (verified with 8.4); MariaDB is not supported yet | `dvf[mysql]` | ready | no |
-| `snowflake` | Snowflake | `dvf[snowflake]` | beta | `AT(TIMESTAMP => ...)` |
-| `bigquery` | Google BigQuery | `dvf[bigquery]` | beta | `FOR SYSTEM_TIME AS OF` |
-| `redshift` | Amazon Redshift | `dvf[redshift]` | beta | no |
-| `databricks` | Databricks SQL warehouses and clusters | `dvf[databricks]` | beta | `TIMESTAMP AS OF` / `VERSION AS OF` (Delta) |
-| `spark` | Apache Spark 4: a running session, local, cluster, or Databricks Connect (unverified); catalog tables, Spark SQL, Parquet, ORC, CSV, JSON (Avro, Delta, Iceberg with their packages); see [Spark](spark.md) | `dvf[spark]` and Java 17 or later | ready | `VERSION AS OF` / `TIMESTAMP AS OF` (Delta, Iceberg) |
-| `mongodb` | MongoDB 4.4+ (verified with 7.0); see [NoSQL](nosql.md) | `dvf[mongodb]` | ready | no |
-| `cassandra` | Apache Cassandra, ScyllaDB, DataStax Astra | `dvf[cassandra]` | beta | no |
-| `dynamodb` | Amazon DynamoDB (run against DynamoDB Local) | `dvf[dynamodb]` | beta | no |
-| `cosmos` | Azure Cosmos DB for NoSQL | `dvf[cosmos]` | beta | no |
+| `postgres` | PostgreSQL 13+ and compatible | `dvf-framework[postgres]` | ready | no |
+| `mssql` | SQL Server 2019+, Azure SQL (verified with SQL Server 2022) | `dvf-framework[mssql]` | ready | `FOR SYSTEM_TIME AS OF` (temporal tables) |
+| `oracle` | Oracle Database (verified with 23ai Free; thin mode, no client libraries) | `dvf-framework[oracle]` | ready | `AS OF TIMESTAMP` (Flashback) |
+| `mysql` | MySQL 8.0.17+ (verified with 8.4); MariaDB is not supported yet | `dvf-framework[mysql]` | ready | no |
+| `snowflake` | Snowflake | `dvf-framework[snowflake]` | beta | `AT(TIMESTAMP => ...)` |
+| `bigquery` | Google BigQuery | `dvf-framework[bigquery]` | beta | `FOR SYSTEM_TIME AS OF` |
+| `redshift` | Amazon Redshift | `dvf-framework[redshift]` | beta | no |
+| `databricks` | Databricks SQL warehouses and clusters | `dvf-framework[databricks]` | beta | `TIMESTAMP AS OF` / `VERSION AS OF` (Delta) |
+| `spark` | Apache Spark 4: a running session, local, cluster, or Databricks Connect (unverified); catalog tables, Spark SQL, Parquet, ORC, CSV, JSON (Avro, Delta, Iceberg with their packages); see [Spark](spark.md) | `dvf-framework[spark]` and Java 17 or later | ready | `VERSION AS OF` / `TIMESTAMP AS OF` (Delta, Iceberg) |
+| `sqlalchemy` | Any database with a SQLAlchemy dialect; dvf's SQL dialect comes from the URL or `dialect:` ([details](catalog-additions.md#generic-connectors-sqlalchemy-and-odbc)) | `dvf-framework[sqlalchemy]` and the database's driver | ready | no |
+| `odbc` | Any ODBC DSN or connection string; dvf's SQL dialect comes from the driver's DBMS name or `dialect:` | `dvf-framework[odbc]` and the database's ODBC driver | ready | no |
+| `mongodb` | MongoDB 4.4+ (verified with 7.0); see [NoSQL](nosql.md) | `dvf-framework[mongodb]` | ready | no |
+| `cassandra` | Apache Cassandra, ScyllaDB, DataStax Astra | `dvf-framework[cassandra]` | beta | no |
+| `dynamodb` | Amazon DynamoDB (run against DynamoDB Local) | `dvf-framework[dynamodb]` | beta | no |
+| `cosmos` | Azure Cosmos DB for NoSQL | `dvf-framework[cosmos]` | beta | no |
 | `sap_hana` | SAP HANA 2.0 and HANA Cloud at database level; see [SAP](sap.md) | install `hdbcli` yourself | beta | no |
 | `sap_rfc` | SAP ECC and S/4HANA through RFC (PyRFC, a custom read module) or OData | PyRFC and the NW RFC SDK yourself; nothing for OData | beta | no |
 
-`pip install 'dvf[all]'` installs every open-source extra. SAP drivers are never installed by dvf.
+`pip install 'dvf-framework[all]'` installs every open-source extra. SAP drivers are never installed by dvf.
 
 NoSQL and SAP RFC datasets are copied once per run into local Parquet files and queried with DuckDB, so every check and comparison works on them; filter them at the source through their dataset `options` ([NoSQL](nosql.md), [SAP](sap.md)). DataFrames passed to `dvf.validate_dataframe` use an in-process `dataframe` connection that cannot be configured in a file ([In-pipeline validation](pipelines.md)).
 

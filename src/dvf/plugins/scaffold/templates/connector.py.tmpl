@@ -1,0 +1,60 @@
+"""The ``{{name}}`` connector.
+
+{{summary}}
+"""
+
+from __future__ import annotations
+
+from fnmatch import fnmatchcase
+from pathlib import Path
+from typing import Any, ClassVar
+
+import pyarrow.json as pa_json
+{{staged_import}}
+
+
+class {{class_name}}(StagedConnector):
+    """Newline-delimited JSON files in a folder, one ``<table>.jsonl`` file per dataset.
+
+    A staged connector suits systems without SQL (APIs, document stores, files): implement
+    :meth:`fetch` to return Arrow record batches, and dvf stages them in a local Parquet file
+    and runs every check and comparison on it with DuckDB. Dataset ``filter`` values are DuckDB
+    SQL applied to the staged rows; push selections down to your system through dataset
+    ``options`` that :meth:`fetch` reads.
+    """
+
+    plugin_name: ClassVar[str] = "{{name}}"
+    dvf_plugin_api: ClassVar[str | None] = "{{plugin_api}}"
+
+    class Config(ConnectionConfig):
+        """Settings of a ``{{name}}`` connection, on top of the common connection settings."""
+
+        path: str
+        """Folder holding the ``<table>.jsonl`` files, relative to the configuration file."""
+
+    config: Config
+
+    def _folder(self) -> Path:
+        folder = Path(self.config.path)
+        return folder if folder.is_absolute() else self.base_dir / folder
+
+    def _file(self, spec: Any) -> Path | None:
+        return self._folder() / f"{spec.table}.jsonl" if spec.table else None
+
+    def fetch(self, spec: Any) -> StagedData:
+        """Read the dataset named by ``spec.table`` (a dvf ``DatasetSpec``)."""
+        file = self._file(spec)
+        if file is None:
+            raise ValueError(f"Connection '{self.name}' reads tables: set 'table' on the dataset.")
+        table = pa_json.read_json(file)
+        return StagedData(schema=table.schema, batches=table.to_batches())
+
+    def dataset_exists(self, spec: Any) -> bool | None:
+        """Whether the dataset's file exists, without reading it."""
+        file = self._file(spec)
+        return file is not None and file.is_file()
+
+    def list_datasets(self, pattern: str) -> list[str]:
+        """Table names matching a glob ``pattern`` (used by table ``pattern`` entries)."""
+        names = sorted(p.stem for p in self._folder().glob("*.jsonl"))
+        return [n for n in names if fnmatchcase(n.lower(), pattern.lower())]

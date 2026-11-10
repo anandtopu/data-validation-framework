@@ -7,6 +7,8 @@
 - Configuration models live in `src/dvf/config/`, or next to a pack's components for pack-specific checks and connections.
 - Systems without SQL subclass `StagedConnector` (`src/dvf/connectors/staged.py`); checks that need both datasets of a table subclass `PairCheck`.
 - After changing configuration or result models, run `uv run nox -s schemas` and commit `schemas/*.json`.
+- After changing configuration models, registered components, or CLI commands, run `uv run nox -s docs_reference` and commit `docs/reference/*.md` and `docs/cli.md`. Every configuration field needs a docstring.
+- The PyPI distribution is `dvf-framework` (`dvf.DISTRIBUTION`); install hints use it. The import package and the command stay `dvf`.
 - Never present stubs as working features. A declared component without an implementation must show as `declared` in `dvf plugins list`, and an implemented one not yet verified against a live system registers with `maturity="beta"`.
 - Spark tests need Java 17 or later and are marked `spark`. Proprietary drivers (SAP `hdbcli`, `pyrfc`, the NW RFC SDK) are never dependencies.
 - Use synthetic data in tests. Never commit secrets.

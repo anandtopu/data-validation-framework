@@ -1,0 +1,59 @@
+"""The ``{{name}}`` report format.
+
+{{summary}}
+"""
+
+from __future__ import annotations
+
+import csv
+from pathlib import Path
+from typing import ClassVar
+
+from dvf.models import ArtifactRef, RunResult
+from dvf.plugins import Reporter, ReportOptions
+
+COLUMNS = [
+    "run_id",
+    "check_id",
+    "status",
+    "severity",
+    "unexpected_count",
+    "total_count",
+    "message",
+]
+
+
+class {{class_name}}(Reporter):
+    """One CSV row per check: check ID, status, severity, counts, and message.
+
+    A reporter renders the canonical results document into files. It must not read data
+    sources: everything comes from the :class:`~dvf.models.RunResult`, so ``dvf report`` can
+    render the format again later from a saved ``results.json``. Messages and samples in the
+    result are already masked according to the configuration's privacy settings.
+    """
+
+    plugin_name: ClassVar[str] = "{{name}}"
+    dvf_plugin_api: ClassVar[str | None] = "{{plugin_api}}"
+    format: ClassVar[str] = "{{name}}"
+    file_name: ClassVar[str] = "checks.csv"
+
+    def render(self, run: RunResult, out_dir: Path, options: ReportOptions) -> list[ArtifactRef]:
+        """Write ``checks.csv`` into ``out_dir`` and return it."""
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / self.file_name
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(COLUMNS)
+            for check in run.iter_checks():
+                writer.writerow(
+                    [
+                        run.run_id,
+                        check.check_id,
+                        check.status.value,
+                        check.severity.value,
+                        check.unexpected_count,
+                        check.total_count,
+                        check.message or "",
+                    ]
+                )
+        return [ArtifactRef(kind="report", path=str(path), format=self.format)]

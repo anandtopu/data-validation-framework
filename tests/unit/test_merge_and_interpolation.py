@@ -137,7 +137,8 @@ class TestInterpolation:
         assert "Did you mean 'env'" in interp.diagnostics[-1].message
         interp.interpolate("${secret:env:MISSING}")
         assert interp.diagnostics[-1].code is Code.SECRET_UNRESOLVED
-        interp.interpolate("${secret:azurekv:vault#name}")
+        registry.declare("secret_provider", "planned", "A provider declared for later")
+        interp.interpolate("${secret:planned:vault#name}")
         assert "declared but not implemented" in interp.diagnostics[-1].message
         interp.interpolate("${secret:no-colon}")
         assert interp.diagnostics[-1].code is Code.INTERPOLATION_SYNTAX

@@ -46,7 +46,11 @@ class DynamoDBConnection(ConnectionConfig):
     aws_access_key_id: SecretStr | None = None
     """Access key; omit to use the default credential chain (environment, profile, role)."""
     aws_secret_access_key: SecretStr | None = None
+    """Secret access key that goes with ``aws_access_key_id``. Use a ``${secret:...}`` reference; it
+    is treated as a secret."""
     aws_session_token: SecretStr | None = None
+    """Session token for temporary credentials. Use a ``${secret:...}`` reference; it is treated as
+    a secret."""
     page_size: PositiveInt = 1000
     """Items requested per page (DynamoDB returns at most 1 MB per page)."""
 

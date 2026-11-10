@@ -66,7 +66,7 @@ app = typer.Typer(
     rich_markup_mode="rich",
     pretty_exceptions_enable=False,
 )
-config_app = typer.Typer(help="Inspect configuration.", no_args_is_help=True)
+config_app = typer.Typer(help="Inspect and upgrade configuration.", no_args_is_help=True)
 schema_app = typer.Typer(help="Export JSON Schemas.", no_args_is_help=True)
 plugins_app = typer.Typer(
     help="Inspect installed plugins and built-in components.", no_args_is_help=True
@@ -545,6 +545,13 @@ OutputDirOption = Annotated[
 VerboseOption = Annotated[bool, typer.Option("--verbose", "-v", help="List every problem.")]
 
 
+def _print_notifications(output: Any) -> None:
+    """Successful notifications (failed ones are already shown as warnings)."""
+    for delivery in getattr(output, "notifications", None) or []:
+        if delivery.ok:
+            out.print(f"[dim]notified[/] {escape(delivery.channel)} ({escape(delivery.type)})")
+
+
 def _finish(result: RunResult, fail_on: Severity, strict: bool, min_score: float | None) -> None:
     code = api.exit_code(result, fail_on=fail_on, strict=strict, min_score=min_score)
     if code:
@@ -660,6 +667,7 @@ def run_command(
     except DvfError as exc:
         raise _execution_error(exc) from exc
     _print_run(output.result, output.artifacts, verbose)
+    _print_notifications(output)
     _finish(output.result, fail_on, strict, min_score)
 
 
@@ -699,6 +707,7 @@ def rerun_command(
     except DvfError as exc:
         raise _execution_error(exc) from exc
     _print_run(output.result, output.artifacts, verbose)
+    _print_notifications(output)
     _finish(output.result, fail_on, False, None)
 
 
@@ -994,6 +1003,7 @@ def compare_command(
     except DvfError as exc:
         raise _execution_error(exc) from exc
     _print_run(output.result, output.artifacts, verbose)
+    _print_notifications(output)
     _finish(output.result, fail_on, False, None)
 
 
@@ -1120,7 +1130,14 @@ def _load_cli_plugins(ctx: typer.Context, registry: Any) -> None:
 
 # Commands added by later phases live in their own modules; each module's register(app) adds its
 # commands. They import helpers from this module inside register(), after it is fully loaded.
-_COMMAND_MODULES = ("dvf.cli.discovery", "dvf.cli.migration", "dvf.cli.packs")
+_COMMAND_MODULES = (
+    "dvf.cli.discovery",
+    "dvf.cli.migration",
+    "dvf.cli.packs",
+    "dvf.cli.tools",
+    "dvf.cli.integrations",
+    "dvf.cli.notify",
+)
 
 
 def _register_command_modules() -> None:

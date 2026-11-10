@@ -1,4 +1,4 @@
-"""MySQL connector (PyMySQL; install with ``pip install 'dvf[mysql]'``).
+"""MySQL connector (PyMySQL; install with ``pip install 'dvf-framework[mysql]'``).
 
 Sessions are read-only (``SET SESSION TRANSACTION READ ONLY``), use UTC (``time_zone =
 '+00:00'``, so ``TIMESTAMP`` columns are read in UTC), and limit statements with
@@ -24,7 +24,7 @@ from dvf.connectors.arrow import batches_from_rows, rows_to_table
 from dvf.core.datasets import ColumnSchema, DatasetKind, DatasetRef, DatasetSchema
 from dvf.core.errors import ConnectorError, DependencyError
 from dvf.core.types import parse_native_type
-from dvf.plugins.base import Connector, Relation
+from dvf.plugins.base import CollationInfo, Connector, ObjectInventory, PhysicalDesign, Relation
 
 logger = logging.getLogger(__name__)
 
@@ -401,6 +401,22 @@ class MySQLConnector(Connector):
             if fnmatchcase(target.lower(), pattern.lower()):
                 names.append(target)
         return sorted(names)
+
+    # ------------------------------------------------------------------ catalog metadata
+    def get_physical_design(self, relation: Relation) -> PhysicalDesign | None:
+        from dvf.packs.catalog.introspect import physical_design
+
+        return physical_design(self, relation)
+
+    def get_collations(self, relation: Relation) -> CollationInfo | None:
+        from dvf.packs.catalog.introspect import collations
+
+        return collations(self, relation)
+
+    def get_object_inventory(self, relation: Relation) -> ObjectInventory | None:
+        from dvf.packs.catalog.introspect import object_inventory
+
+        return object_inventory(self, relation)
 
 
 def native_type_from_description(description: Any, charset: int | None = None) -> str:

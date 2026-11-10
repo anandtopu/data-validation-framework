@@ -49,6 +49,7 @@ from dvf.core.errors import ConfigError, PluginError
 from dvf.models.results import make_check_id
 from dvf.plugins.local import load_local_plugins
 from dvf.plugins.registry import PluginKind, Registry, get_registry
+from dvf.security.redaction import global_redactor, is_sensitive_key
 from dvf.security.secrets import SecretContext, SecretResolver
 
 ENV_OVERRIDE_PREFIX = "DVF__"
@@ -673,8 +674,11 @@ class _Loader:
             else:
                 value = error.get("input")
                 if isinstance(value, str | int | float | bool) and field_name:
-                    shown = repr(value) if len(repr(value)) <= 60 else repr(value)[:57] + "...'"
-                    message = f"Invalid value {shown} for '{field_name}': {message}"
+                    if _hide_input(field_name, value):
+                        message = f"Invalid value for '{field_name}': {message}"
+                    else:
+                        shown = repr(value) if len(repr(value)) <= 60 else repr(value)[:57] + "...'"
+                        message = f"Invalid value {shown} for '{field_name}': {message}"
             self._add(DiagnosticLevel.ERROR, code, message, path, hint=hint)
 
     def _add(
@@ -809,3 +813,11 @@ def _allowed_fields(model: type[BaseModel], loc: Sequence[Any]) -> set[str] | No
     if isinstance(current, type) and issubclass(current, BaseModel):
         return {f.alias or name for name, f in current.model_fields.items()}
     return None
+
+
+def _hide_input(field_name: str, value: object) -> bool:
+    """Whether an invalid value must not be echoed: a credential field or a resolved secret."""
+    if is_sensitive_key(field_name):
+        return True
+    text = str(value)
+    return global_redactor().redact_text(text) != text

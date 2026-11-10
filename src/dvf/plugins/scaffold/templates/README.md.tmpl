@@ -1,0 +1,45 @@
+# {{distribution}}
+
+A [dvf](https://pypi.org/project/dvf-framework/) plugin. {{summary}}
+
+The {{kind}} `{{name}}` is registered through the `{{group}}` entry point group, so dvf
+finds it as soon as this package is installed. The generated component works as written; replace
+its logic with your own and keep the tests passing.
+
+## Develop
+
+```bash
+python -m venv .venv
+. .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -e ".[test]"
+pytest
+dvf plugins list --kind {{kind}}
+```
+
+## Use
+
+```yaml
+{{usage}}
+```
+
+`dvf validate-config` checks the settings against the component's `Config` model, and
+`dvf schema config` includes them in the JSON Schema for editor autocomplete.
+
+## Compatibility
+
+The component declares `dvf_plugin_api = "{{plugin_api}}"`. dvf refuses to load it, with a
+clear message in `dvf plugins list`, when its plugin API is outside that range. Widen the range
+after testing with a newer dvf, and keep `dvf-framework{{dvf_requirement}}` in `pyproject.toml`
+in step.
+
+## Publish
+
+```bash
+pip install build twine
+python -m build
+twine check dist/*
+twine upload dist/*           # or publish from CI with PyPI Trusted Publishing
+```
+
+Name public packages `dvf-<organization>-<purpose>` and keep component names namespaced
+(`acme.vat_number_valid`) so they never collide with future built-ins.

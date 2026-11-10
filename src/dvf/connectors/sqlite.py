@@ -26,7 +26,7 @@ from dvf.core.errors import ConnectorError
 from dvf.core.types import LogicalType, parse_native_type
 from dvf.normalize import canonical as canon
 from dvf.normalize.normalizers import truncate_datetime
-from dvf.plugins.base import Connector, Relation
+from dvf.plugins.base import CollationInfo, Connector, ObjectInventory, PhysicalDesign, Relation
 from dvf.sql.dialects import get_dialect
 
 _SQL = get_dialect("sqlite")
@@ -271,3 +271,19 @@ class SQLiteConnector(Connector):
         from fnmatch import fnmatchcase
 
         return sorted(r[0] for r in rows if fnmatchcase(r[0].lower(), pattern.lower()))
+
+    # ------------------------------------------------------------------ catalog metadata
+    def get_physical_design(self, relation: Relation) -> PhysicalDesign | None:
+        from dvf.packs.catalog.introspect import physical_design
+
+        return physical_design(self, relation)
+
+    def get_collations(self, relation: Relation) -> CollationInfo | None:
+        from dvf.packs.catalog.introspect import collations
+
+        return collations(self, relation)
+
+    def get_object_inventory(self, relation: Relation) -> ObjectInventory | None:
+        from dvf.packs.catalog.introspect import object_inventory
+
+        return object_inventory(self, relation)

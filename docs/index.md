@@ -2,32 +2,55 @@
 
 **Configuration-driven data and schema validation for data migrations and data engineering.**
 
-`dvf` validates schemas and data quality, reconciles source and target datasets at scale, and produces detailed, auditable reports. It targets migration projects (SAP, on-premise databases to cloud warehouses, SQL to NoSQL) and data engineering pipelines (PySpark, Databricks, Parquet, Avro, JSON, CSV).
+dvf validates schemas and data quality, reconciles source and target datasets at scale, and produces detailed, auditable reports. It is built for migration projects (SAP, on-premise databases to cloud warehouses, SQL to NoSQL) and for data engineering pipelines (PySpark, Databricks, Parquet, Avro, JSON, CSV).
 
-!!! warning "Pre-alpha: Phase 3"
-    dvf validates and compares data in files and lakehouse tables (Parquet, CSV, JSON, ORC, Avro, Excel, fixed width, XML, Delta Lake, Iceberg), databases (DuckDB, SQLite, PostgreSQL, SQL Server, Oracle, MySQL), MongoDB, and Spark, plus beta Snowflake, BigQuery, Redshift, Databricks, Cassandra, DynamoDB, Cosmos DB, SAP HANA, and SAP RFC connectors. It scales to large tables with bucketed checksums and parallel execution, explains every failure, covers the migration checklist (MIG-01 to MIG-14), and validates DataFrames inside pipelines. Docker images, notifications, and the 1.0 release arrive in Phase 4.
+```bash
+pip install dvf-framework
+dvf init demo --example
+dvf run demo/dvf.yaml
+```
 
-## What works today
+[Quickstart](getting-started.md){ .md-button .md-button--primary } [Your first migration comparison](tutorials/first-migration.md){ .md-button }
 
-| Command | What it does |
+## What it does
+
+- **Reconciles source and target** with escalating strategies: row counts, control totals, column profiles, bucketed checksums computed inside each database, and row-level diffs that move only the rows that differ. Every mismatch is classified (whitespace, case, encoding, rounding, truncation, time zone shift, NULL substitution, ...) with a suggested fix.
+- **Compares schemas**: missing and extra columns, type compatibility across dialects, lengths, precision, nullability, constraints, collations, and schema drift.
+- **Checks data quality**: completeness, uniqueness, validity, referential integrity, freshness, custom SQL and expressions, file-level checks, and the migration checklist (scope, deltas, idempotency, SCD Type 2, deletes, key maps, audit columns, cutover sign-off).
+- **Scales**: computation is pushed to the data, memory stays bounded, tables run in parallel with per-connection limits, and interrupted runs resume from checkpoints.
+- **Explains failures**: the exact SQL per side, masked samples, `dvf trace` for one record through every normalizer, extracts and repro files, run history and baselines.
+- **Reports** in HTML, JSON, JUnit, Markdown, Excel, and PDF, all rendered from one versioned results document, plus notifications, OpenLineage events, OpenTelemetry, and result sinks for dashboards.
+- **Runs anywhere**: the command line, Python (`dvf.run`, `dvf.validate_dataframe` inside a pipeline), Docker, the GitHub Action and CI templates, and orchestrators such as Airflow, Dagster, Prefect, Databricks Workflows, and Azure Data Factory.
+- **Extends** through plugins: checks, connectors, normalizers, report formats, notification channels, secret providers, and sinks register exactly like the built-ins.
+
+## Sources
+
+| Kind | Systems |
 |---|---|
-| `dvf init <dir> --example` | A runnable local project with synthetic data and seeded discrepancies |
-| `dvf run <file>` | Schema checks, comparisons, and data quality checks, with HTML, JSON, JUnit, and Markdown reports |
-| `dvf compare <source> <target> -k <key>` | An ad hoc comparison of two datasets, without a configuration file |
-| `dvf report --from results.json` | Re-render reports from a results document |
-| `dvf connections test <file>` | Open every connection and run a trivial query |
-| `dvf run <file> --resume <run_id>` | Continue an interrupted or killed run from its checkpoints |
-| `dvf explain`, `dvf trace`, `dvf debug`, `dvf rerun`, `dvf history` | See the plan and SQL, follow one record, drill into a run, rerun failures, list runs ([Debugging](debugging.md)) |
-| `dvf discover`, `dvf import-mapping`, `dvf import-contract`, `dvf export-contract` | Generate a configuration from two databases' metadata, a source-to-target mapping sheet, or an ODCS contract ([Discovery](discovery.md)) |
-| `dvf profile`, `dvf suggest` | Column profiles, and candidate checks from them |
-| `dvf baseline capture`, `dvf history compare` | Pre-migration baselines and rehearsal-to-rehearsal comparisons ([Migration validations](migration.md)) |
-| `dvf sap templates` | SAP business object templates ([SAP](sap.md)) |
-| `dvf.validate_dataframe(df, checks)` | Validate a pandas, Polars, Arrow, or Spark DataFrame in a pipeline and quarantine failing rows ([In-pipeline validation](pipelines.md)) |
-| `dvf --version`, `dvf version` | Versions of dvf, its schemas, the plugin API, Python, and the platform |
-| `dvf validate-config <file>` | Load and validate a configuration, with file, line, and column for every problem |
-| `dvf config show <file>` | The fully resolved configuration, with secrets redacted |
-| `dvf schema config`, `dvf schema results` | JSON Schemas for IDE autocomplete and integrations |
-| `dvf plugins list` | Every registered component and whether it is ready, beta, or declared |
+| Files and lakehouse tables | CSV, Parquet, JSON, NDJSON, ORC, Avro, Excel, fixed width, XML, Delta Lake, Iceberg, on local disks or S3, ADLS, and GCS |
+| Databases | DuckDB, SQLite, PostgreSQL, SQL Server, Oracle, MySQL, plus any SQLAlchemy dialect or ODBC driver |
+| Cloud warehouses | Snowflake, BigQuery, Redshift, Databricks SQL |
+| Big data | Spark (local, cluster, Databricks Connect), pandas, Polars, and Arrow DataFrames |
+| NoSQL | MongoDB, Cassandra, DynamoDB, Cosmos DB |
+| SAP | SAP HANA, and ECC or S/4HANA through RFC or OData |
+
+Each connector has a maturity level: `ready` (verified against the live system) or `beta` (implemented and tested, not yet verified against a live system). The [components reference](reference/components.md) lists them all, and `dvf plugins list` shows the same in your installation.
+
+## Find your way
+
+| You want to | Read |
+|---|---|
+| Install dvf and run the example | [Installation](installation.md), [Quickstart](getting-started.md) |
+| Learn by doing | [Your first migration comparison](tutorials/first-migration.md), [Write a plugin check](tutorials/plugin-check.md) |
+| Write a configuration | [Configuration](configuration.md), the [configuration reference](reference/configuration.md) |
+| Choose checks and comparisons | [Checks and comparisons](validations.md), [Migration validations](migration.md) |
+| Connect a system | [Connectors](connectors.md), [Files](files.md), [NoSQL](nosql.md), [SAP](sap.md), [Spark](spark.md) |
+| Generate a configuration | [Discovery and generation](discovery.md) |
+| Investigate a failure | [Debugging and operations](debugging.md) |
+| Automate it | [CI/CD](ci.md), [Orchestrators](orchestrators.md), [Notifications](notifications.md), [In-pipeline validation](pipelines.md) |
+| Operate it safely | [Security](security.md), [Observability](observability.md) |
+| Look something up | [Command line](cli.md), [Python API](reference.md), [Results schema](reference/results.md) |
+| Extend it | [Plugins](plugins.md) |
 
 ## Design principles
 
@@ -38,4 +61,4 @@
 5. One canonical, versioned result model behind every report.
 6. Read-only and safe by default; secrets never appear in logs or reports.
 
-Start with [Getting started](getting-started.md), then read [Configuration](configuration.md).
+The decisions behind the design are recorded in the [architecture decision records](adr/README.md).

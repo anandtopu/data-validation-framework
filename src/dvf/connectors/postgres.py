@@ -1,4 +1,4 @@
-"""PostgreSQL connector (psycopg 3; install with ``pip install 'dvf[postgres]'``)."""
+"""PostgreSQL connector (psycopg 3; install with ``pip install 'dvf-framework[postgres]'``)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from dvf.connectors.arrow import batches_from_rows, rows_to_table
 from dvf.core.datasets import ColumnSchema, DatasetKind, DatasetRef, DatasetSchema
 from dvf.core.errors import ConnectorError, DependencyError
 from dvf.core.types import parse_native_type
-from dvf.plugins.base import Connector, Relation
+from dvf.plugins.base import CollationInfo, Connector, ObjectInventory, PhysicalDesign, Relation
 
 if TYPE_CHECKING:
     import psycopg
@@ -244,6 +244,22 @@ class PostgresConnector(Connector):
             if fnmatchcase(target.lower(), pattern.lower()):
                 names.append(target)
         return sorted(names)
+
+    # ------------------------------------------------------------------ catalog metadata
+    def get_physical_design(self, relation: Relation) -> PhysicalDesign | None:
+        from dvf.packs.catalog.introspect import physical_design
+
+        return physical_design(self, relation)
+
+    def get_collations(self, relation: Relation) -> CollationInfo | None:
+        from dvf.packs.catalog.introspect import collations
+
+        return collations(self, relation)
+
+    def get_object_inventory(self, relation: Relation) -> ObjectInventory | None:
+        from dvf.packs.catalog.introspect import object_inventory
+
+        return object_inventory(self, relation)
 
 
 def _quote(identifier: str) -> str:

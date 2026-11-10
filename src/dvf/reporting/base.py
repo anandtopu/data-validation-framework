@@ -62,7 +62,7 @@ def render_reports(
     for name in formats:
         entry = registry.get(PluginKind.REPORTER, name)
         if not entry.ready:
-            extra = f" (install dvf[{entry.extra}])" if entry.extra else ""
+            extra = f" (install dvf-framework[{entry.extra}])" if entry.extra else ""
             raise PluginError(
                 f"Report format '{name}' is declared but not implemented in this version{extra}. "
                 "Run 'dvf plugins list --kind reporter' to see the available formats."

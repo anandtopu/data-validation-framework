@@ -1,0 +1,39 @@
+"""The ``{{name}}`` check.
+
+{{summary}}
+"""
+
+from __future__ import annotations
+
+from typing import ClassVar
+
+from dvf.plugins import CheckConfig, CheckContext, Dimension, RowCheck
+
+
+class {{class_name}}(RowCheck):
+    """Values of a column must match a regular expression.
+
+    A :class:`~dvf.plugins.RowCheck` returns a SQL condition that is true for valid rows. dvf
+    counts the rows where it is not true, applies ``where`` and ``mostly``, captures masked
+    sample rows, and records the SQL. Build the condition with the context helpers so it works
+    in every dialect (DuckDB, PostgreSQL, Snowflake, Spark, files, DataFrames, ...).
+    """
+
+    plugin_name: ClassVar[str] = "{{name}}"
+    dvf_plugin_api: ClassVar[str | None] = "{{plugin_api}}"
+    dimension = Dimension.VALIDITY
+
+    class Config(CheckConfig):
+        """Settings of the ``{{name}}`` check, on top of the common check settings."""
+
+        column: str
+        """Column to check."""
+        pattern: str = r"^[A-Z0-9]+$"
+        """Regular expression that every non-NULL value must match in full."""
+
+    config: Config
+
+    def predicate(self, ctx: CheckContext) -> str:
+        """A SQL condition that is true for valid rows (NULLs pass; see ``not_null``)."""
+        value = ctx.text(ctx.col(self.config.column))
+        return ctx.regex_match(value, self.config.pattern)

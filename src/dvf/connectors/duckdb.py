@@ -23,7 +23,14 @@ from dvf.config.models import DatasetSpec
 from dvf.core.datasets import ColumnSchema, DatasetKind, DatasetRef, DatasetSchema
 from dvf.core.errors import ConnectorError
 from dvf.core.types import parse_native_type
-from dvf.plugins.base import ConnectionReport, Connector, Relation
+from dvf.plugins.base import (
+    CollationInfo,
+    ConnectionReport,
+    Connector,
+    ObjectInventory,
+    PhysicalDesign,
+    Relation,
+)
 from dvf.sql.dialects import get_dialect
 
 if TYPE_CHECKING:
@@ -260,6 +267,26 @@ class DuckDBConnector(Connector):
             ):
                 names.append(qualified if "." in pattern else row["table_name"])
         return sorted(names)
+
+    # ------------------------------------------------------------------ catalog metadata
+    def _catalog_tables(self) -> bool:
+        """Catalog metadata applies to ``duckdb`` connections, not files or staged data."""
+        return isinstance(self.config, DuckDBConnection)
+
+    def get_physical_design(self, relation: Relation) -> PhysicalDesign | None:
+        from dvf.packs.catalog.introspect import physical_design
+
+        return physical_design(self, relation) if self._catalog_tables() else None
+
+    def get_collations(self, relation: Relation) -> CollationInfo | None:
+        from dvf.packs.catalog.introspect import collations
+
+        return collations(self, relation) if self._catalog_tables() else None
+
+    def get_object_inventory(self, relation: Relation) -> ObjectInventory | None:
+        from dvf.packs.catalog.introspect import object_inventory
+
+        return object_inventory(self, relation) if self._catalog_tables() else None
 
 
 # ============================================================================ files

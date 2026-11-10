@@ -1,4 +1,4 @@
-"""Apache Spark connector (``pip install 'dvf[spark]'``; Spark needs Java 17 or later).
+"""Apache Spark connector (``pip install 'dvf-framework[spark]'``; Spark needs Java 17 or later).
 
 A ``spark`` connection works in a Spark session:
 

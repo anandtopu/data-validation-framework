@@ -149,6 +149,23 @@ def convert_value(value: Any, edm: str) -> Any:
     return value if isinstance(value, str) else str(value)
 
 
+def _origin(url: str) -> str:
+    parts = urllib.parse.urlsplit(url)
+    port = parts.port or (443 if parts.scheme.lower() == "https" else 80)
+    return f"{parts.scheme.lower()}://{(parts.hostname or '').lower()}:{port}"
+
+
+class _SameOriginRedirect(urllib.request.HTTPRedirectHandler):
+    """Follows redirects on the same origin only (urllib would forward credentials anywhere)."""
+
+    def redirect_request(
+        self, req: urllib.request.Request, fp: Any, code: int, msg: str, headers: Any, newurl: str
+    ) -> urllib.request.Request | None:
+        if _origin(newurl) != _origin(req.full_url):
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 class ODataBackend(SapRfcBackend):
     """SAP OData v2 and v4 services (Gateway, S/4HANA APIs, CDS views) over HTTP."""
 
@@ -203,18 +220,29 @@ class ODataBackend(SapRfcBackend):
         return urllib.parse.urlunsplit(parts._replace(query=encoded))
 
     def get(self, url: str, accept: str = "application/json") -> bytes:
-        """GET ``url`` (absolute or relative to the service root) and return the body."""
+        """GET ``url`` (absolute or relative to the service root) and return the body.
+
+        Only URLs on the service root's scheme, host, and port are fetched, and redirects to
+        another origin are refused, so next links or redirects in a response can never send the
+        credentials elsewhere.
+        """
         absolute = urllib.parse.urljoin(self.root + "/", url)
         if not absolute.lower().startswith(("http://", "https://")):
             raise ConnectorError(f"Refusing to fetch a non-HTTP OData URL: {absolute}")
+        if _origin(absolute) != _origin(self.root):
+            raise ConnectorError(
+                f"Refusing to follow an OData link to another host ({_origin(absolute)}); "
+                f"only {_origin(self.root)} is configured."
+            )
         request = urllib.request.Request(  # noqa: S310 - only http(s), checked above
             self._with_sap_params(absolute), headers=self._headers(accept), method="GET"
         )
         timeout = self.config.query_timeout_s or _DEFAULT_TIMEOUT
+        opener = urllib.request.build_opener(
+            _SameOriginRedirect(), urllib.request.HTTPSHandler(context=self._context())
+        )
         try:
-            with urllib.request.urlopen(  # noqa: S310 - only http(s), checked above
-                request, timeout=timeout, context=self._context()
-            ) as reply:
+            with opener.open(request, timeout=timeout) as reply:
                 body: bytes = reply.read()
                 return body
         except urllib.error.HTTPError as exc:

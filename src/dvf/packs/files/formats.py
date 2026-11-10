@@ -586,6 +586,8 @@ def load_iceberg_table(location: str, options: IcebergOptions) -> Any:
             raise ConnectorError(
                 f"Iceberg table '{location}' not found in catalog '{name}': {exc}"
             ) from exc
+        finally:
+            _close_catalog(catalog)
     from pyiceberg.table import StaticTable
 
     metadata = _iceberg_metadata(location)
@@ -595,6 +597,15 @@ def load_iceberg_table(location: str, options: IcebergOptions) -> Any:
         )
     except Exception as exc:
         raise ConnectorError(f"Could not read Iceberg metadata '{metadata}': {exc}") from exc
+
+
+def _close_catalog(catalog: Any) -> None:
+    """Release a catalog's database connections (the sql catalog keeps a SQLAlchemy engine).
+    Reading a loaded table needs only its metadata and file IO, not the catalog."""
+    engine = getattr(catalog, "engine", None)
+    dispose = getattr(engine, "dispose", None)
+    if callable(dispose):
+        dispose()
 
 
 def _iceberg_snapshot(table: Any, as_of: str | None) -> int | None:

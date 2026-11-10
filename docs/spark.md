@@ -11,7 +11,7 @@ All three are verified on a local Spark session (Apache Spark 4.3 in local mode)
 ## Requirements
 
 ```bash
-pip install 'dvf[spark]'      # pyspark 4.0 or later
+pip install 'dvf-framework[spark]'      # pyspark 4.0 or later
 ```
 
 Spark needs Java 17 or 21 (`java` on `PATH`, or `JAVA_HOME`). dvf imports pyspark only when a Spark connection opens or the Spark engine runs, so other connections work without it.
@@ -74,7 +74,7 @@ dvf never stops a Spark session. A session dvf started stays running for later r
 With `databricks_connect: true`, dvf opens `databricks.connect.DatabricksSession` with the profile, cluster, or serverless option you give, and otherwise the SDK's usual configuration (environment variables or `~/.databrickscfg`). Install Databricks Connect in an environment **without** pyspark (it replaces it):
 
 ```bash
-pip install dvf 'databricks-connect==15.4.*'   # match your cluster's runtime
+pip install dvf-framework 'databricks-connect==15.4.*'   # match your cluster's runtime
 ```
 
 Spark Connect cannot create child sessions, so dvf applies its settings to the Databricks session itself and restores them when the connection closes. This mode is not verified by dvf's tests. To compare data in Databricks SQL warehouses without Spark Connect, use the `databricks` connector instead.

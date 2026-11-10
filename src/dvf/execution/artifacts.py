@@ -29,7 +29,10 @@ _UNSAFE = re.compile(r"[^A-Za-z0-9_.+=-]+")
 
 
 def safe_name(check_id: str) -> str:
-    return _UNSAFE.sub("_", check_id)[:150]
+    """A file or folder name for ``check_id`` that cannot leave its folder (no separators, no
+    leading dots, so never ``.`` or ``..``)."""
+    name = _UNSAFE.sub("_", check_id)[:150]
+    return "_" + name.lstrip(".") if not name or name.startswith(".") else name
 
 
 def text_table(columns: list[str], rows: list[list[Any]]) -> pa.Table:

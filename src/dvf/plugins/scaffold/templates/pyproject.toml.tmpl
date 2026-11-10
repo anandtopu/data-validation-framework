@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "{{distribution}}"
+version = "0.1.0"
+description = "dvf plugin: {{summary}}"
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["dvf", "dvf-plugin", "data-validation"]
+dependencies = ["dvf-framework{{dvf_requirement}}"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+# dvf finds the component through this entry point group once the package is installed.
+[project.entry-points."{{group}}"]
+"{{name}}" = "{{module}}.{{kind_module}}:{{class_name}}"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{module}}"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers"]

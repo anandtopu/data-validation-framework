@@ -1,0 +1,6 @@
+# Files the demo creates (see demo_warehouse.py and run_after_dbt_build.py).
+jaffle.duckdb
+jaffle.duckdb.wal
+dvf.yaml
+dvf-reports/
+.dvf/

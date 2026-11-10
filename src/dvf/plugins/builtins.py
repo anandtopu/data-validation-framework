@@ -139,12 +139,12 @@ _ENGINES = {
 }
 
 _SECRET_PROVIDERS_DECLARED = {
-    "keyring": ("Operating system keyring", None),
+    "keyring": ("Operating system keyring", "keyring"),
     "azurekv": ("Azure Key Vault", "azure"),
     "awssm": ("AWS Secrets Manager", "aws"),
     "gcpsm": ("Google Cloud Secret Manager", "gcp"),
-    "vault": ("HashiCorp Vault", "vault"),
-    "databricks": ("Databricks secret scopes", "databricks"),
+    "vault": ("HashiCorp Vault", None),
+    "databricks": ("Databricks secret scopes", None),
 }
 
 _SINKS = {

@@ -268,8 +268,12 @@ def test_views_and_files_are_cleaned_up(spark: Any, data: Path) -> None:
     config["defaults"]["execution"] = {"temp_dir": "spill"}
     _outcome(_run(config, data))
     assert list((data / "spill").iterdir()) == []
+    # listTables also returns the session's own temporary views; only global views are the
+    # engine's.
     leftovers = [
-        t.name for t in spark.catalog.listTables("global_temp") if t.name.startswith("dvf_")
+        t.name
+        for t in spark.catalog.listTables("global_temp")
+        if t.name.startswith("dvf_") and t.database == "global_temp"
     ]
     assert leftovers == []
 

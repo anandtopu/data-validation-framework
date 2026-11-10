@@ -333,10 +333,17 @@ def test_missing_target_and_unknown_strategy(tmp_path: Path) -> None:
     checks = _by_suffix(result)
     assert checks["schema.object_exists"].status is Status.FAILED
     assert checks["schema.columns_present"].status is Status.SKIPPED
-    result = _run(
-        _pair_config("s", "s", keys=["id"], comparison={"strategies": ["sample"]}), tmp_path
-    )
-    assert _by_suffix(result)["compare.sample"].status is Status.ERROR
+    # A strategy that is declared but has no implementation is an error result, not a crash.
+    from dvf.plugins.registry import PluginKind, new_registry
+
+    registry = new_registry()
+    registry.declare(PluginKind.COMPARATOR, "acme_planned", "A strategy planned for later")
+    config = _pair_config("s", "s", keys=["id"], comparison={"strategies": ["acme_planned"]})
+    loaded = api.load_config_data(config, base_dir=tmp_path, strict=False, registry=registry)
+    result = api.run(loaded, write_reports=False, registry=registry).result
+    planned = _by_suffix(result)["compare.acme_planned"]
+    assert planned.status is Status.ERROR
+    assert planned.error is not None and "declared but not implemented" in planned.error.message
 
 
 def test_bad_connection_is_contained(tmp_path: Path) -> None:

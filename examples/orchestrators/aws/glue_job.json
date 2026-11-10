@@ -1,0 +1,25 @@
+{
+  "Name": "dvf-validation",
+  "Description": "dvf data validation (aws glue create-job --cli-input-json file://glue_job.json). Example only; not verified on AWS.",
+  "Role": "arn:aws:iam::123456789012:role/dvf-glue-job",
+  "GlueVersion": "5.0",
+  "Command": {
+    "Name": "glueetl",
+    "ScriptLocation": "s3://my-bucket/dvf/glue_dvf_job.py",
+    "PythonVersion": "3"
+  },
+  "WorkerType": "G.1X",
+  "NumberOfWorkers": 2,
+  "Timeout": 240,
+  "MaxRetries": 0,
+  "DefaultArguments": {
+    "--additional-python-modules": "dvf-framework[postgres]==1.0.0",
+    "--project_s3_uri": "s3://my-bucket/dvf/project/",
+    "--config": "dvf.yaml",
+    "--reports_s3_uri": "s3://my-bucket/dvf/reports/",
+    "--only": "tag:nightly",
+    "--fail_on": "error",
+    "--min_score": "95",
+    "--enable-continuous-cloudwatch-log": "true"
+  }
+}

@@ -37,7 +37,7 @@ Layers merge from lowest to highest precedence. Mappings merge key by key; lists
 | `${env:NAME}` | Environment variable, falling back to the `.env` file next to the config (or `--env-file`) |
 | `${env:NAME:-default}` | The same, with a default |
 | `${var:name}` | A value from the `vars:` section or `--var name=value` |
-| `${secret:provider:path#key}` | A secret from a registered provider: `env`, `dotenv` today; `azurekv`, `awssm`, `gcpsm`, `vault`, `keyring`, `databricks` are declared for later phases |
+| `${secret:provider:path#key}` | A secret from a registered provider: `env`, `dotenv`, `vault`, `keyring`, `awssm`, `azurekv`, `gcpsm`, `databricks` ([Security](security.md)) |
 | `${run.id}`, `${run.date}`, `${run.timestamp}`, `${run.profile}` | Kept as written and resolved when a run starts |
 | `$${` | A literal `${` |
 
@@ -47,7 +47,7 @@ Resolved secret values are registered for redaction: they never appear in logs, 
 
 ## Inheritance
 
-Settings flow from `defaults` to each suite (`suites[].defaults`) and from the suite to each table. Tables carry their effective `engine`, `severity`, `sample_size`, `normalization`, `comparison`, and `schema_checks`. Checks without `severity` take the table's; checks without `side` default to `target` in comparison suites and `source` in single-dataset suites.
+Settings flow from `defaults` to each suite (`suites[].defaults`) and from the suite to each table. Tables carry their effective `engine`, `severity`, `sample_size`, `normalization`, `comparison`, `schema_checks`, and `schema_options`. Checks without `severity` take the table's; checks without `side` default to `target` in comparison suites and `source` in single-dataset suites.
 
 ## Sections
 
@@ -63,12 +63,15 @@ Settings flow from `defaults` to each suite (`suites[].defaults`) and from the s
 | `reports` | Formats, output folder, branding, extracts, template overrides |
 | `history` | Run history store and baseline |
 | `sinks` | Databases that receive every run's results as tables, for dashboards |
-| `notifications` | Teams, Slack, webhook, or email notifications by run status |
+| `notifications` | Slack, Teams, email, or webhook notifications by run status ([Notifications](notifications.md)) |
+| `lineage` | OpenLineage run events with data quality facets, off by default ([Observability](observability.md)) |
+| `telemetry` | OpenTelemetry spans and metrics, off by default ([Observability](observability.md)) |
+| `triage` | The AI-assisted triage interface, off by default and opt-in ([Observability](observability.md)) |
 | `plugins` | Local plugin `paths` (relative to the config) and `modules` |
 | `extends`, `profiles` | Layering, applied by the loader |
 
 !!! note "What applies at run time"
-    Every section takes effect except `notifications`, which arrive in Phase 4 (they are validated). `as_of` raises a clear error on connectors without time travel. See [Checks and comparisons](validations.md) for every validation and [Debugging and operations](debugging.md) for checkpoints, history, extracts, and repro files.
+    Every section takes effect. `as_of` raises a clear error on connectors without time travel. See [Checks and comparisons](validations.md) for every validation and [Debugging and operations](debugging.md) for checkpoints, history, extracts, and repro files.
 
 ### Execution
 
@@ -123,13 +126,13 @@ sinks:
   - { type: postgres, url: "${secret:env:RESULTS_DB_URL}", schema: dvf, table_prefix: dvf_ }
 ```
 
-Sinks (`duckdb`, `sqlite`, `postgres`) append each run to `<prefix>runs`, `<prefix>checks`, and `<prefix>column_mismatches`, replacing the rows of a run written twice. A failing sink is logged and noted in the results' metadata; it never fails the run.
+Sinks (`duckdb`, `sqlite`, `postgres`, `delta`, and the beta `snowflake`; see [details](catalog-additions.md#result-sinks-delta-and-snowflake)) append each run to `<prefix>runs`, `<prefix>checks`, and `<prefix>column_mismatches`, replacing the rows of a run written twice. A failing sink is logged and noted in the results' metadata; it never fails the run.
 
 ### Reports and extracts
 
 ```yaml
 reports:
-  formats: [json, html, junit, markdown, excel]   # excel needs pip install 'dvf[excel]'
+  formats: [json, html, junit, markdown, excel]   # excel needs pip install 'dvf-framework[excel]'
   output_dir: ./reports/${run.date}/${run.id}
   extracts: { enabled: true, format: parquet, max_rows_per_check: 100000 }
 ```

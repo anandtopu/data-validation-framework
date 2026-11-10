@@ -8,7 +8,7 @@ Values keep JSON's type names (``string``, ``number``, ``boolean``, ``null``, ``
 ``array``) in schema checks.
 
 Beta: verified with a fake SDK, not yet against Cosmos DB or its emulator. Install the SDK with
-``pip install 'dvf[cosmos]'`` (and ``azure-identity`` for ``credential: default``).
+``pip install 'dvf-framework[cosmos]'`` (and ``azure-identity`` for ``credential: default``).
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ class CosmosConnection(ConnectionConfig):
     endpoint: str
     """Account URI, for example ``https://myaccount.documents.azure.com:443/``."""
     database: str
+    """ID of the database holding the containers that datasets name."""
     key: SecretStr | None = None
     """Account key (or a resource token). Use a secret reference."""
     credential: Literal["key", "default"] = "key"

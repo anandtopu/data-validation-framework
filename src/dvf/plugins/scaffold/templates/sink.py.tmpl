@@ -1,0 +1,52 @@
+"""The ``{{name}}`` result sink.
+
+{{summary}}
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import ClassVar
+
+from dvf.models import RunResult
+from dvf.plugins import ResultSink
+
+
+class {{class_name}}(ResultSink):
+    """Append one JSON object per check result to a JSON Lines file.
+
+    A sink receives every finished run, for dashboards and audit stores. Its settings are the
+    common sink settings (``path``, ``url``, ``schema``, ``table_prefix``, ``options``) in
+    ``self.config``; relative paths resolve against the configuration's folder
+    (``self.base_dir``). A failing sink is logged and noted in the results; it never fails the
+    run, so raise a clear exception when something is wrong.
+    """
+
+    plugin_name: ClassVar[str] = "{{name}}"
+    dvf_plugin_api: ClassVar[str | None] = "{{plugin_api}}"
+
+    def _path(self) -> Path:
+        if not self.config.path:
+            raise ValueError(f"Sink {self.plugin_name} needs 'path': the JSON Lines file to write.")
+        path = Path(self.config.path)
+        return path if path.is_absolute() else self.base_dir / path
+
+    def write(self, run: RunResult) -> None:
+        """Append ``run``'s check results (run metadata on every line)."""
+        path = self._path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            for check in run.iter_checks():
+                row = {
+                    "run_id": run.run_id,
+                    "project": run.project,
+                    "run_status": run.status.value,
+                    "started_at": run.started_at.isoformat(),
+                    "check_id": check.check_id,
+                    "status": check.status.value,
+                    "severity": check.severity.value,
+                    "unexpected_count": check.unexpected_count,
+                    "total_count": check.total_count,
+                }
+                handle.write(json.dumps(row) + "\n")

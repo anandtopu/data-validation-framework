@@ -1,0 +1,45 @@
+"""Tests of the ``{{name}}`` report format.
+
+Run ``pytest`` after ``pip install -e ".[test]"``.
+"""
+
+from __future__ import annotations
+
+import csv
+from pathlib import Path
+
+import pytest
+from dvf import api
+from dvf.plugins import PluginKind, new_registry
+
+from {{module}}.{{kind_module}} import COLUMNS, {{class_name}}
+
+NAME = "{{name}}"
+
+
+def test_registered_through_its_entry_point() -> None:
+    registry = new_registry(load_entry_points=True)
+    assert registry.get(PluginKind.REPORTER, NAME).implementation is {{class_name}}
+    assert not registry.load_failures
+
+
+def test_writes_one_row_per_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)  # dvf keeps run history in ./.dvf
+    (tmp_path / "old.csv").write_text("id,name\n1,Ada\n2,Grace\n", encoding="utf-8")
+    (tmp_path / "new.csv").write_text("id,name\n1,Ada\n2,Hopper\n", encoding="utf-8")
+    output = api.compare("old.csv", "new.csv", keys=["id"], formats=[NAME], output_dir="out")
+    (report,) = [a for a in output.artifacts if a.format == NAME]
+    with Path(report.path).open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert list(rows[0]) == COLUMNS
+    assert len(rows) == len(list(output.result.iter_checks()))
+    assert {row["status"] for row in rows} >= {"passed", "failed"}
+
+
+def test_rerender_from_results_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a.csv").write_text("id\n1\n", encoding="utf-8")
+    output = api.compare("a.csv", "a.csv", keys=["id"], formats=["json"], output_dir="out")
+    (results,) = [a for a in output.artifacts if a.format == "json"]
+    artifacts = api.render_reports(results.path, [NAME], tmp_path / "again")
+    assert Path(artifacts[0].path).name == "checks.csv"

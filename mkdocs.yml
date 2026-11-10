@@ -6,6 +6,9 @@ theme:
   name: material
   features:
     - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
     - content.code.copy
   palette:
     - scheme: default
@@ -15,20 +18,37 @@ theme:
 
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
-  - Configuration: configuration.md
-  - Checks and comparisons: validations.md
-  - Connectors: connectors.md
-  - Files and lakehouse tables: files.md
-  - NoSQL sources: nosql.md
-  - SAP: sap.md
-  - Spark: spark.md
-  - Migration validations: migration.md
-  - In-pipeline validation: pipelines.md
-  - Discovery and generation: discovery.md
-  - Debugging and operations: debugging.md
+  - Get started:
+      - Installation: installation.md
+      - Quickstart: getting-started.md
+      - Tutorials:
+          - Your first migration comparison: tutorials/first-migration.md
+          - Write a plugin check: tutorials/plugin-check.md
+  - Guides:
+      - Configuration: configuration.md
+      - Checks and comparisons: validations.md
+      - Catalog additions for 1.0: catalog-additions.md
+      - Connectors: connectors.md
+      - Files and lakehouse tables: files.md
+      - NoSQL sources: nosql.md
+      - SAP: sap.md
+      - Spark: spark.md
+      - Migration validations: migration.md
+      - In-pipeline validation: pipelines.md
+      - Discovery and generation: discovery.md
+      - Debugging and operations: debugging.md
+      - CI/CD: ci.md
+      - Orchestrators: orchestrators.md
+      - Notifications: notifications.md
+      - Observability: observability.md
+      - Security: security.md
+  - Reference:
+      - Configuration: reference/configuration.md
+      - Components: reference/components.md
+      - Command line: cli.md
+      - Python API: reference.md
+      - Results schema: reference/results.md
   - Plugins: plugins.md
-  - API reference: reference.md
   - Architecture decisions:
       - adr/README.md
       - adr/0001-record-architecture-decisions.md
@@ -40,13 +60,18 @@ nav:
       - adr/0007-phase1-execution-model.md
       - adr/0008-phase2-scale-and-debugging.md
       - adr/0009-phase3-big-data-and-specialized-sources.md
+      - adr/0010-phase4-integrations-and-release.md
+  - Releasing: releasing.md
 
 markdown_extensions:
   - admonition
+  - attr_list
   - tables
   - toc: { permalink: true }
+  - pymdownx.details
   - pymdownx.highlight
   - pymdownx.superfences
+  - pymdownx.tabbed: { alternate_style: true }
 
 plugins:
   - search
@@ -57,5 +82,12 @@ plugins:
           options:
             show_source: false
             show_root_heading: true
+            show_root_full_path: true
+            show_symbol_type_heading: true
             docstring_style: sphinx
             members_order: source
+            merge_init_into_class: true
+            separate_signature: true
+            show_signature_annotations: true
+            filters: ["!^_"]
+            heading_level: 2

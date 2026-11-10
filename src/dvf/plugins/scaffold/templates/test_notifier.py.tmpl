@@ -1,0 +1,67 @@
+"""Tests of the ``{{name}}`` notification channel.
+
+Run ``pytest`` after ``pip install -e ".[test]"``.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from dvf import api
+from dvf.models import Status
+from dvf.plugins import PluginKind, new_registry
+
+from {{module}}.{{kind_module}} import {{class_name}}
+
+NAME = "{{name}}"
+
+
+def test_registered_through_its_entry_point() -> None:
+    registry = new_registry(load_entry_points=True)
+    assert registry.get(PluginKind.NOTIFIER, NAME).implementation is {{class_name}}
+    assert not registry.load_failures
+
+
+def _run(folder: Path, emails: str) -> tuple[Status, Path]:
+    csv_text = f"id,email\n1,a@example.com\n2,{emails}\n"
+    (folder / "customers.csv").write_text(csv_text, encoding="utf-8")
+    outbox = folder / "notifications.jsonl"
+    config: dict[str, Any] = {
+        "version": 1,
+        "project": {"name": "plugin-test"},
+        "defaults": {"execution": {"checkpoints": False}},
+        "connections": {"files": {"type": "files", "path": "."}},
+        "suites": [
+            {
+                "name": "quality",
+                "source": "files",
+                "tables": [
+                    {
+                        "name": "customers",
+                        "source": {"path": "customers.csv"},
+                        "checks": [{"type": "not_null", "columns": ["email"]}],
+                    }
+                ],
+            }
+        ],
+        "notifications": [{"type": NAME, "path": str(outbox), "on": ["failed", "error"]}],
+    }
+    loaded = api.load_config_data(config, base_dir=folder)
+    return api.run(loaded, write_reports=False, history=False).result.status, outbox
+
+
+def test_a_failed_run_is_notified(tmp_path: Path) -> None:
+    status, outbox = _run(tmp_path, emails="")
+    assert status is Status.FAILED
+    (line,) = outbox.read_text(encoding="utf-8").splitlines()
+    message = json.loads(line)
+    assert message["status"] == "failed"
+    assert message["project"] == "plugin-test"
+
+
+def test_a_passed_run_is_not_notified(tmp_path: Path) -> None:
+    status, outbox = _run(tmp_path, emails="b@example.com")
+    assert status is Status.PASSED
+    assert not outbox.exists()

@@ -40,6 +40,7 @@ from dvf.packs.sap.tables import T002_DEFAULTS, TCURX_DEFAULTS
 from dvf.plugins.base import INPUT_COLUMN_PREFIX, Normalizer
 from dvf.sql.dialects import Dialect, get_dialect
 from tests.server_backends import SERVERS, Backend, make_backend
+from tests.unit.test_spark_support import PANDAS_WARNING, local_spark
 
 PARITY = settings(max_examples=30, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 LIVE = settings(
@@ -597,25 +598,16 @@ def test_postgres_parity(pg: Any, case: Case, data: st.DataObject) -> None:
 
 @pytest.fixture(scope="module")
 def spark() -> Iterator[Any]:
-    pyspark_sql = pytest.importorskip("pyspark.sql")
-    existing = pyspark_sql.SparkSession.getActiveSession()
-    session = existing or (
-        pyspark_sql.SparkSession.builder.master("local[1]")
-        .appName("dvf-sap-parity")
-        .config("spark.sql.session.timeZone", "UTC")
-        .config("spark.ui.enabled", "false")
-        .config("spark.sql.shuffle.partitions", "1")
-        .getOrCreate()
-    )
+    # The process's shared session, as in the other Spark modules. Starting a separate one
+    # here (with its own app name) hung on some Windows machines: Spark's launcher could not
+    # read back its temp file, exited 0 without a JVM, and PySpark waits for that forever.
+    session = local_spark()
     previous_zone = session.conf.get("spark.sql.session.timeZone")
     session.conf.set("spark.sql.session.timeZone", "UTC")
     try:
         yield session
     finally:
-        if existing is None:
-            session.stop()  # only a session this module started
-        else:
-            session.conf.set("spark.sql.session.timeZone", previous_zone)
+        session.conf.set("spark.sql.session.timeZone", previous_zone)
 
 
 def _spark_dialects() -> list[str]:
@@ -647,9 +639,13 @@ def spark_eval(session: Any, dialect: str, case: Case, rows: Sequence[Row]) -> l
     frame = session.createDataFrame([(i, v, c) for i, (v, c) in enumerate(rows)], schema)
     frame.createOrReplaceTempView("dvf_sap_parity")
     sql = sql_for(case, get_dialect(dialect), "`v`", "c")
-    return [
-        r[0] for r in session.sql(f"SELECT {sql} AS c FROM dvf_sap_parity ORDER BY i").collect()
-    ]
+    try:
+        return [
+            r[0] for r in session.sql(f"SELECT {sql} AS c FROM dvf_sap_parity ORDER BY i").collect()
+        ]
+    finally:
+        # The session is shared by every Spark test in the process; leave no views behind.
+        session.catalog.dropTempView("dvf_sap_parity")
 
 
 SPARK = settings(
@@ -660,6 +656,7 @@ SPARK = settings(
 
 
 @pytest.mark.spark
+@pytest.mark.filterwarnings(PANDAS_WARNING)
 @pytest.mark.parametrize("dialect", _spark_dialects())
 @pytest.mark.parametrize("case", ALL_CASES, ids=lambda c: c.id)
 @SPARK

@@ -53,6 +53,7 @@ jobs:
           uv run dvf validate-config examples/sap_to_snowflake/dvf.yaml --profile uat
           uv run dvf validate-config examples/mongodb_to_postgres/dvf.yaml
           uv run dvf validate-config examples/migration/dvf.yaml
+          uv run dvf validate-config examples/ci/dvf.yaml
       - name: Run the seeded example end to end (exit code 1 = defects found, as intended)
         shell: bash
         run: |
@@ -193,6 +194,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync --locked --group docs
+      - name: Generated reference pages are up to date
+        run: uv run nox -s docs_reference -- --check
       - run: uv run mkdocs build --strict
 
   package:
@@ -213,3 +216,33 @@ jobs:
           /tmp/wheel-test/bin/dvf init /tmp/demo --example
           set +e; /tmp/wheel-test/bin/dvf run /tmp/demo/dvf.yaml --no-reports; code=$?; set -e
           test "$code" -eq 1
+
+  audit:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+      # Exports uv.lock (runtime with every extra, then every group) to hashed requirements
+      # and audits them against the PyPI and OSV advisory databases, without installing.
+      - run: uvx nox@2026.10.20 -s audit
+
+  docker:
+    name: Container image (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [slim, full]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the image version comes from git
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.12"
+      # Builds docker/Dockerfile.<variant> for linux/amd64, then checks dvf --version and runs
+      # the seeded example in a mounted folder (exit code 1 and a report.html expected).
+      - run: uvx nox@2026.10.20 -s docker -- ${{ matrix.variant }}

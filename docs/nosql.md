@@ -6,10 +6,10 @@ dvf reads MongoDB, Cassandra, DynamoDB, and Cosmos DB collections, turns their d
 
 | Type | Systems | Install | Status |
 |---|---|---|---|
-| `mongodb` | MongoDB 4.4+ (verified with 7.0) | `dvf[mongodb]` | ready |
-| `cassandra` | Apache Cassandra, ScyllaDB, DataStax Astra | `dvf[cassandra]` | beta |
-| `dynamodb` | Amazon DynamoDB, DynamoDB Local | `dvf[dynamodb]` | beta |
-| `cosmos` | Azure Cosmos DB for NoSQL | `dvf[cosmos]` | beta |
+| `mongodb` | MongoDB 4.4+ (verified with 7.0) | `dvf-framework[mongodb]` | ready |
+| `cassandra` | Apache Cassandra, ScyllaDB, DataStax Astra | `dvf-framework[cassandra]` | beta |
+| `dynamodb` | Amazon DynamoDB, DynamoDB Local | `dvf-framework[dynamodb]` | beta |
+| `cosmos` | Azure Cosmos DB for NoSQL | `dvf-framework[cosmos]` | beta |
 
 `beta` connectors are complete and unit-tested against fake drivers; DynamoDB has also been run against DynamoDB Local. None of them can read a dataset `as_of` a point in time.
 

@@ -1,0 +1,329 @@
+# dvf GitHub Action: run a dvf configuration, publish the Markdown summary and reports, and
+# fail the step by the quality gates. Documented in docs/ci.md.
+#
+#   - uses: <owner>/dvf@v1
+#     with:
+#       config: dvf.yaml
+#       only: tag:pr
+#       extras: postgres
+#       min-score: "95"
+name: dvf data validation
+description: Run dvf data and schema validations, publish reports, and enforce quality gates.
+author: dvf contributors
+branding:
+  icon: check-square
+  color: blue
+
+inputs:
+  config:
+    description: Configuration file, relative to working-directory.
+    required: true
+    default: dvf.yaml
+  profile:
+    description: Environment profile (dvf run --profile).
+    required: false
+    default: ""
+  only:
+    description: >-
+      Selectors (dvf run --only), separated by spaces, commas, or new lines, for example
+      "tag:pr" or "suite:finance table:orders*". Empty runs everything.
+    required: false
+    default: ""
+  fail-on:
+    description: Fail when a check at or above this severity fails (info, warning, error, critical).
+    required: false
+    default: error
+  min-score:
+    description: Fail when the quality score (0 to 100) is below this. Empty means no minimum.
+    required: false
+    default: ""
+  strict:
+    description: Warnings also fail the run (true or false).
+    required: false
+    default: "false"
+  formats:
+    description: Report formats besides JSON, separated by spaces or commas. markdown is added when step-summary is true.
+    required: false
+    default: html junit markdown
+  output-dir:
+    description: Report folder, relative to working-directory.
+    required: false
+    default: dvf-reports
+  args:
+    description: >-
+      More dvf run arguments, split on spaces (no shell quoting), for example
+      "--set defaults.sample_size=10 --parallel 4".
+    required: false
+    default: ""
+  extras:
+    description: dvf extras to install, separated by commas, for example "postgres,excel".
+    required: false
+    default: ""
+  version:
+    description: >-
+      dvf-framework version to install: "1.2.3", a specifier such as ">=1.2,<2", or "latest".
+      Empty installs the version matching the action's tag (v1.2.3 installs 1.2.3, v1 installs
+      the newest 1.x), or the latest release when the tag is not a version.
+    required: false
+    default: ""
+  install-from:
+    description: >-
+      Install dvf from this local path instead of PyPI (for testing the action on a checkout of
+      the dvf repository). Empty installs from PyPI.
+    required: false
+    default: ""
+  installer:
+    description: uv (faster) or pip.
+    required: false
+    default: uv
+  python-version:
+    description: Python version to set up (3.11 or later).
+    required: false
+    default: "3.12"
+  setup-python:
+    description: Set up Python with actions/setup-python (false uses the runner's python).
+    required: false
+    default: "true"
+  step-summary:
+    description: Append the Markdown summary to the job summary.
+    required: false
+    default: "true"
+  annotations:
+    description: Annotate the run with up to 10 failed or errored checks.
+    required: false
+    default: "true"
+  upload-artifact:
+    description: Upload the report folder as a workflow artifact.
+    required: false
+    default: "true"
+  artifact-name:
+    description: Name of the uploaded artifact.
+    required: false
+    default: dvf-reports
+  retention-days:
+    description: Days to keep the artifact. Empty uses the repository default.
+    required: false
+    default: ""
+  fail-step:
+    description: >-
+      Fail the step when dvf exits with a non-zero code (failed gates, execution or configuration
+      errors). Set to false to continue and read the outputs instead.
+    required: false
+    default: "true"
+  working-directory:
+    description: Folder to run dvf in.
+    required: false
+    default: "."
+
+outputs:
+  exit-code:
+    description: "dvf run exit code: 0 passed, 1 quality gates failed, 2 execution error, 3 configuration error."
+    value: ${{ steps.run.outputs.exit-code }}
+  passed:
+    description: "\"true\" when the run passed its quality gates."
+    value: ${{ steps.run.outputs.passed }}
+  status:
+    description: Run status (passed, warning, failed, error, skipped).
+    value: ${{ steps.run.outputs.status }}
+  quality-score:
+    description: Quality score from 0 to 100 (empty when no check was evaluated).
+    value: ${{ steps.run.outputs.quality-score }}
+  run-id:
+    description: The dvf run ID.
+    value: ${{ steps.run.outputs.run-id }}
+  results-path:
+    description: Path of results.json (empty when the run wrote no results).
+    value: ${{ steps.run.outputs.results-path }}
+  report-dir:
+    description: Folder holding the reports.
+    value: ${{ steps.run.outputs.report-dir }}
+  dvf-version:
+    description: The installed dvf version.
+    value: ${{ steps.install.outputs.dvf-version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      if: inputs.setup-python == 'true'
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install dvf
+      id: install
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_EXTRAS: ${{ inputs.extras }}
+        INPUT_INSTALL_FROM: ${{ inputs.install-from }}
+        INPUT_INSTALLER: ${{ inputs.installer }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        ACTION_REF: ${{ github.action_ref }}
+      run: |
+        set -euo pipefail
+        venv="${RUNNER_TEMP}/dvf-venv"
+        if command -v cygpath >/dev/null 2>&1; then venv="$(cygpath -u "$venv")"; fi
+        python -m venv "$venv"
+        # Windows runners: Scripts/ and .exe (native tools need the full file name).
+        if [ -d "$venv/Scripts" ]; then bin="$venv/Scripts"; exe=".exe"; else bin="$venv/bin"; exe=""; fi
+        extras="$(printf '%s' "$INPUT_EXTRAS" | tr -d ' ')"
+        suffix=""
+        if [ -n "$extras" ]; then suffix="[$extras]"; fi
+        if [ -n "$INPUT_INSTALL_FROM" ]; then
+          source_path="$INPUT_INSTALL_FROM"
+          case "$source_path" in
+            /*|[A-Za-z]:*) ;;
+            *) source_path="$GITHUB_WORKSPACE/$INPUT_WORKING_DIRECTORY/$source_path" ;;
+          esac
+          spec="${source_path}${suffix}"
+        else
+          version="$INPUT_VERSION"
+          if [ -z "$version" ]; then
+            ref="${ACTION_REF#v}"
+            if printf '%s' "$ref" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-]?[A-Za-z0-9.]+)?$'; then
+              version="$ref"
+            elif printf '%s' "$ref" | grep -Eq '^[0-9]+$'; then
+              version=">=${ref},<$((ref + 1))"
+            elif printf '%s' "$ref" | grep -Eq '^[0-9]+\.[0-9]+$'; then
+              version="~=${ref}.0"
+            else
+              version="latest"
+            fi
+          fi
+          case "$version" in
+            latest) spec="dvf-framework${suffix}" ;;
+            *[\<\>=~!]*) spec="dvf-framework${suffix}${version}" ;;
+            *) spec="dvf-framework${suffix}==${version}" ;;
+          esac
+        fi
+        echo "Installing ${spec}"
+        if [ "$INPUT_INSTALLER" = "uv" ]; then
+          "$bin/python$exe" -m pip install --quiet --disable-pip-version-check uv
+          "$bin/uv$exe" pip install --python "$bin/python$exe" "$spec"
+        else
+          "$bin/python$exe" -m pip install --disable-pip-version-check "$spec"
+        fi
+        installed="$("$bin/dvf$exe" --version | awk '{print $2}')"
+        echo "dvf ${installed}"
+        {
+          echo "dvf=$bin/dvf$exe"
+          echo "python=$bin/python$exe"
+          echo "dvf-version=$installed"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Run dvf
+      id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        DVF: ${{ steps.install.outputs.dvf }}
+        DVF_PYTHON: ${{ steps.install.outputs.python }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_PROFILE: ${{ inputs.profile }}
+        INPUT_ONLY: ${{ inputs.only }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_MIN_SCORE: ${{ inputs.min-score }}
+        INPUT_STRICT: ${{ inputs.strict }}
+        INPUT_FORMATS: ${{ inputs.formats }}
+        INPUT_OUTPUT_DIR: ${{ inputs.output-dir }}
+        INPUT_ARGS: ${{ inputs.args }}
+        INPUT_STEP_SUMMARY: ${{ inputs.step-summary }}
+        INPUT_ANNOTATIONS: ${{ inputs.annotations }}
+      run: |
+        # GitHub runs bash with -e; dvf's exit code is recorded here and applied by the last step.
+        set +e -uo pipefail
+        set -f  # selectors are globs for dvf, not for the shell
+        out="$INPUT_OUTPUT_DIR"
+        args=(run "$INPUT_CONFIG" --output-dir "$out" --fail-on "$INPUT_FAIL_ON")
+        if [ -n "$INPUT_PROFILE" ]; then args+=(--profile "$INPUT_PROFILE"); fi
+        for selector in $(printf '%s' "$INPUT_ONLY" | tr ',\n' '  '); do
+          args+=(--only "$selector")
+        done
+        formats="$(printf '%s' "$INPUT_FORMATS" | tr ',\n' '  ')"
+        if [ "$INPUT_STEP_SUMMARY" = "true" ]; then formats="$formats markdown"; fi
+        for format in $(printf '%s\n' $formats | sort -u); do
+          args+=(--format "$format")
+        done
+        if [ -n "$INPUT_MIN_SCORE" ]; then args+=(--min-score "$INPUT_MIN_SCORE"); fi
+        if [ "$INPUT_STRICT" = "true" ]; then args+=(--strict); fi
+        if [ -n "$INPUT_ARGS" ]; then
+          read -r -a extra <<< "$INPUT_ARGS"
+          args+=("${extra[@]}")
+        fi
+        echo "dvf ${args[*]}"
+        "$DVF" "${args[@]}"
+        code=$?
+        report_dir=""
+        if [ -d "$out" ]; then
+          report_dir="$(cd "$out" && pwd)"
+          # On Windows runners, give later steps (and upload-artifact) a native path.
+          if command -v cygpath >/dev/null 2>&1; then report_dir="$(cygpath -w "$report_dir")"; fi
+        fi
+        {
+          echo "exit-code=$code"
+          echo "report-dir=$report_dir"
+          if [ "$code" = "0" ]; then echo "passed=true"; else echo "passed=false"; fi
+        } >> "$GITHUB_OUTPUT"
+        results="$out/results.json"
+        if [ -f "$results" ]; then
+          "$DVF_PYTHON" - "$results" "$report_dir" "$INPUT_ANNOTATIONS" <<'PY'
+        import json
+        import os
+        import sys
+        from pathlib import Path
+
+        results, report_dir, annotate = sys.argv[1], sys.argv[2], sys.argv[3] == "true"
+        data = json.loads(Path(results).read_text(encoding="utf-8"))
+        score = (data.get("summary") or {}).get("quality_score")
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+            fh.write(f"run-id={data.get('run_id', '')}\n")
+            fh.write(f"status={data.get('status', '')}\n")
+            fh.write(f"quality-score={'' if score is None else score}\n")
+            fh.write(f"results-path={Path(report_dir) / 'results.json'}\n")
+        if annotate:
+            def escape(text: str, prop: bool = False) -> str:
+                text = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                return text.replace(":", "%3A").replace(",", "%2C") if prop else text
+            shown = 0
+            for suite in data.get("suites", []):
+                for dataset in suite.get("datasets", []):
+                    for check in dataset.get("checks", []):
+                        if check.get("status") not in ("failed", "error") or shown >= 10:
+                            continue
+                        level = "error" if check.get("status") == "error" or check.get("severity") in ("error", "critical") else "warning"
+                        title = escape(f"dvf {check.get('status')} {check.get('check_id')}", prop=True)
+                        message = escape(str(check.get("message") or ""))[:1000]
+                        print(f"::{level} title={title}::{message}")
+                        shown += 1
+        PY
+        else
+          echo "::warning title=dvf::No results.json was written (configuration or execution error, exit code $code)."
+        fi
+        if [ "$INPUT_STEP_SUMMARY" = "true" ] && [ -f "$out/summary.md" ]; then
+          cat "$out/summary.md" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        exit 0
+
+    - name: Upload reports
+      if: always() && inputs.upload-artifact == 'true' && steps.run.outputs.report-dir != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.run.outputs.report-dir }}
+        retention-days: ${{ inputs.retention-days }}
+        if-no-files-found: warn
+
+    - name: Apply quality gates
+      if: inputs.fail-step == 'true'
+      shell: bash
+      env:
+        CODE: ${{ steps.run.outputs.exit-code }}
+        SCORE: ${{ steps.run.outputs.quality-score }}
+      run: |
+        case "$CODE" in
+          0) echo "dvf passed its quality gates (quality score ${SCORE:-n/a})." ;;
+          1) echo "::error title=dvf::Quality gates failed (quality score ${SCORE:-n/a}); see the job summary and the reports."; exit 1 ;;
+          3) echo "::error title=dvf::Configuration error; see the Run dvf step."; exit 3 ;;
+          *) echo "::error title=dvf::Execution error (exit code ${CODE:-unknown}); see the Run dvf step."; exit "${CODE:-2}" ;;
+        esac

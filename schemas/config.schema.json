@@ -46,6 +46,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -101,6 +102,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -117,12 +119,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -136,6 +140,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -157,10 +183,12 @@
           "title": "Action"
         },
         "column": {
+          "description": "Column to check.",
           "title": "Column",
           "type": "string"
         },
         "values": {
+          "description": "Accepted values. They are compared as text unless all of them are numbers or all are\nbooleans.",
           "items": {
             "anyOf": [
               {
@@ -206,6 +234,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to compare text values case-insensitively.",
               "title": "Case Sensitive",
               "type": "boolean"
             },
@@ -266,6 +295,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -321,6 +351,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -337,12 +368,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -356,6 +389,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -386,6 +441,7 @@
             }
           ],
           "default": null,
+          "description": "Load timestamp column: it must be set, at most ``max_future`` ahead of now, and not before\n``not_before``.",
           "title": "Load Timestamp"
         },
         "batch_id": {
@@ -398,6 +454,7 @@
             }
           ],
           "default": null,
+          "description": "Batch ID column: it must be set, and ``max_batches`` and ``allowed_batches`` may limit its\nvalues.",
           "title": "Batch Id"
         },
         "source_system": {
@@ -410,6 +467,7 @@
             }
           ],
           "default": null,
+          "description": "Source system column: it must be set, and ``allowed_source_systems`` may limit its values.",
           "title": "Source System"
         },
         "not_before": {
@@ -483,6 +541,7 @@
           "title": "Max Batches"
         },
         "allowed_batches": {
+          "description": "Accepted batch IDs, compared as trimmed, case-insensitive text; needs ``batch_id``.",
           "items": {
             "anyOf": [
               {
@@ -504,6 +563,7 @@
           "type": "array"
         },
         "allowed_source_systems": {
+          "description": "Accepted source systems, compared as trimmed, case-insensitive text; needs\n``source_system``.",
           "items": {
             "type": "string"
           },
@@ -560,6 +620,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -615,6 +676,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -631,12 +693,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -650,6 +714,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -741,6 +827,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -796,6 +883,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -812,12 +900,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -831,6 +921,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -867,6 +979,7 @@
           ]
         },
         "metrics": {
+          "description": "Metrics compared with the baseline; ``groups`` compares the row counts per\n``comparison.group_by`` group.",
           "items": {
             "enum": [
               "row_count",
@@ -892,7 +1005,8 @@
           "type": "array"
         },
         "tolerance": {
-          "$ref": "#/$defs/BaselineTolerance"
+          "$ref": "#/$defs/BaselineTolerance",
+          "description": "Accepted differences between the current metrics and the baseline."
         },
         "baseline_table": {
           "anyOf": [
@@ -986,6 +1100,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -1050,6 +1165,7 @@
           "type": "object"
         },
         "project": {
+          "description": "Google Cloud project that runs the query jobs and qualifies dataset names given without\none.",
           "title": "Project",
           "type": "string"
         },
@@ -1063,6 +1179,7 @@
             }
           ],
           "default": null,
+          "description": "Default dataset for unqualified table names, as ``dataset`` or ``project.dataset``.",
           "title": "Dataset"
         },
         "location": {
@@ -1075,6 +1192,7 @@
             }
           ],
           "default": null,
+          "description": "Location of the query jobs, such as ``US`` or ``europe-west3``; the client's default when\nomitted.",
           "title": "Location"
         },
         "credentials_path": {
@@ -1111,6 +1229,7 @@
             }
           ],
           "default": null,
+          "description": "Report title; defaults to the project name.",
           "title": "Title"
         },
         "logo": {
@@ -1123,6 +1242,7 @@
             }
           ],
           "default": null,
+          "description": "Logo image file, relative to the configuration; HTML reports embed it.",
           "title": "Logo"
         },
         "primary_color": {
@@ -1143,6 +1263,7 @@
             }
           ],
           "default": null,
+          "description": "Accent color of the reports, as ``#RRGGBB``.",
           "title": "Primary Color"
         }
       },
@@ -1169,6 +1290,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -1245,6 +1367,7 @@
           "anyOf": [
             {
               "default": 9042,
+              "description": "CQL native protocol port of the contact points; not used with ``secure_connect_bundle``.",
               "maximum": 65535,
               "minimum": 1,
               "title": "Port",
@@ -1278,6 +1401,7 @@
             }
           ],
           "default": null,
+          "description": "User name for plain-text authentication.",
           "title": "Username"
         },
         "password": {
@@ -1299,6 +1423,7 @@
             }
           ],
           "default": null,
+          "description": "Password of ``username``. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Password"
         },
         "local_datacenter": {
@@ -1378,12 +1503,14 @@
             }
           ],
           "default": null,
+          "description": "Native protocol version, from 3 to 6; the driver negotiates one when omitted.",
           "title": "Protocol Version"
         },
         "connect_timeout_s": {
           "anyOf": [
             {
               "default": 10,
+              "description": "Seconds to wait for a connection to a node.",
               "exclusiveMinimum": 0,
               "title": "Connect Timeout S",
               "type": "integer"
@@ -1458,6 +1585,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -1513,6 +1641,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -1529,12 +1658,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -1548,6 +1679,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -1569,7 +1722,8 @@
           "title": "Action"
         },
         "changes": {
-          "$ref": "#/$defs/ChangeTableRef"
+          "$ref": "#/$defs/ChangeTableRef",
+          "description": "The CDC change table: where it is, and its key, operation, and sequence columns."
         },
         "key_columns": {
           "description": "Key columns of the checked dataset; defaults to the table's keys on that side.",
@@ -1588,6 +1742,7 @@
           "type": "array"
         },
         "update_values": {
+          "description": "Operation codes of updates (case-insensitive).",
           "items": {
             "type": "string"
           },
@@ -1595,6 +1750,7 @@
           "type": "array"
         },
         "delete_values": {
+          "description": "Operation codes of deletes (case-insensitive).",
           "items": {
             "type": "string"
           },
@@ -1634,6 +1790,7 @@
       "description": "A column of the change table's after-image compared with the checked dataset.",
       "properties": {
         "change": {
+          "description": "Column of the change table's after-image.",
           "title": "Change",
           "type": "string"
         },
@@ -1694,6 +1851,7 @@
             }
           ],
           "default": null,
+          "description": "Table or view name, optionally qualified (``schema.table``). Set exactly one of ``table`` and\n``query``.",
           "title": "Table"
         },
         "query": {
@@ -1706,6 +1864,7 @@
             }
           ],
           "default": null,
+          "description": "SQL query used as the dataset. Set exactly one of ``table`` and ``query``.",
           "title": "Query"
         },
         "filter": {
@@ -1808,6 +1967,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -1863,6 +2023,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -1879,12 +2040,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -1898,6 +2061,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -1919,6 +2104,7 @@
           "title": "Action"
         },
         "columns": {
+          "description": "Columns to check (at least one).",
           "items": {
             "type": "string"
           },
@@ -2024,6 +2210,7 @@
             }
           ],
           "default": null,
+          "description": "Source column name. Set exactly one of ``source`` and ``source_expr``.",
           "title": "Source"
         },
         "source_expr": {
@@ -2040,10 +2227,12 @@
           "title": "Source Expr"
         },
         "target": {
+          "description": "Target column name; each target column may be mapped only once.",
           "title": "Target",
           "type": "string"
         },
         "normalize": {
+          "description": "Normalizers applied to this column on both sides before comparison, in order.",
           "items": {
             "anyOf": [
               {
@@ -2083,12 +2272,14 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Tolerance for this column; replaces ``comparison.tolerance``."
         },
         "pii": {
           "anyOf": [
             {
               "default": false,
+              "description": "Treat this column as personal data: its values are masked when ``privacy.mask_pii`` is on.",
               "title": "Pii",
               "type": "boolean"
             },
@@ -2124,6 +2315,7 @@
           "title": "Include"
         },
         "exclude": {
+          "description": "Columns left out of the comparison, by source or target name. Glob patterns are allowed, and\nexclusions win over ``include``.",
           "items": {
             "type": "string"
           },
@@ -2131,6 +2323,7 @@
           "type": "array"
         },
         "mappings": {
+          "description": "Renamed, derived, or normalized columns, with optional per-column tolerances and PII tags.",
           "items": {
             "$ref": "#/$defs/ColumnMapping"
           },
@@ -2159,6 +2352,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip the comparison strategies; schema checks and the table's checks still\nrun.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -2270,6 +2464,7 @@
           "type": "array"
         },
         "aggregates": {
+          "description": "Aggregates the ``aggregate`` strategy compares per column, overall or per ``group_by``\ngroup.",
           "items": {
             "enum": [
               "count",
@@ -2287,7 +2482,8 @@
           "type": "array"
         },
         "tolerance": {
-          "$ref": "#/$defs/ToleranceConfig"
+          "$ref": "#/$defs/ToleranceConfig",
+          "description": "Differences accepted as equal; a column mapping's ``tolerance`` replaces it for that\ncolumn."
         },
         "sample": {
           "anyOf": [
@@ -2298,7 +2494,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Sample size and strata of the ``sample`` strategy (REC-07). Without it, the strategy sizes\nthe sample for a margin of error of one percentage point."
         },
         "max_mismatch_rows": {
           "anyOf": [
@@ -2361,6 +2558,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -2416,6 +2614,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -2432,12 +2631,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -2451,6 +2652,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -2588,6 +2811,7 @@
         "width": {
           "anyOf": [
             {
+              "description": "Number of characters the value occupies.",
               "exclusiveMinimum": 0,
               "title": "Width",
               "type": "integer"
@@ -2711,6 +2935,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -2766,6 +2991,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -2782,12 +3008,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -2801,6 +3029,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -2843,7 +3093,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Header control record: which line holds it and how to read its values."
         },
         "trailer": {
           "anyOf": [
@@ -2854,7 +3105,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Trailer control record: which line holds it and how to read its values."
         },
         "record_count": {
           "anyOf": [
@@ -2924,6 +3176,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -2993,6 +3246,7 @@
           "type": "string"
         },
         "database": {
+          "description": "ID of the database holding the containers that datasets name.",
           "title": "Database",
           "type": "string"
         },
@@ -3093,6 +3347,7 @@
         "name": {
           "anyOf": [
             {
+              "description": "Name of the check, required for this type; it becomes part of the check ID.",
               "maxLength": 128,
               "minLength": 1,
               "pattern": "^[A-Za-z0-9_-]+$",
@@ -3114,6 +3369,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -3169,6 +3425,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -3185,12 +3442,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -3204,6 +3463,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -3225,12 +3506,14 @@
           "title": "Action"
         },
         "sql": {
+          "description": "SQL query to run. ``{table}`` stands for the checked dataset, with its filter applied and\nalready aliased.",
           "minLength": 1,
           "title": "Sql",
           "type": "string"
         },
         "returns": {
           "default": "failing_rows",
+          "description": "``failing_rows``: every row the query returns is a failure. ``scalar``: the query returns one\nnumber, which is compared with ``expect``.",
           "enum": [
             "failing_rows",
             "scalar"
@@ -3247,7 +3530,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "The expectation the scalar result must meet; required when ``returns`` is ``scalar`` and not\nallowed otherwise."
         }
       },
       "required": [
@@ -3278,6 +3562,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -3342,10 +3627,12 @@
           "type": "object"
         },
         "server_hostname": {
+          "description": "Host name from the SQL warehouse's or cluster's connection details; a pasted ``https://`` URL\nis accepted.",
           "title": "Server Hostname",
           "type": "string"
         },
         "http_path": {
+          "description": "HTTP path from the SQL warehouse's or cluster's connection details.",
           "title": "Http Path",
           "type": "string"
         },
@@ -3368,6 +3655,7 @@
             }
           ],
           "default": null,
+          "description": "Personal access token. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Access Token"
         },
         "auth_type": {
@@ -3380,6 +3668,7 @@
             }
           ],
           "default": null,
+          "description": "Another authentication type supported by the driver, such as ``databricks-oauth`` (browser\nsign-in), instead of ``access_token``.",
           "title": "Auth Type"
         },
         "catalog": {
@@ -3392,6 +3681,7 @@
             }
           ],
           "default": null,
+          "description": "Initial catalog of the session, for unqualified table names.",
           "title": "Catalog"
         },
         "schema": {
@@ -3404,6 +3694,7 @@
             }
           ],
           "default": null,
+          "description": "Initial schema of the session, for unqualified table names.",
           "title": "Schema"
         }
       },
@@ -3435,6 +3726,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -3611,6 +3903,7 @@
         },
         "options": {
           "additionalProperties": true,
+          "description": "Connector-specific dataset settings, such as file reader options, NoSQL filters and\nprojections, or RFC read settings.",
           "title": "Options",
           "type": "object"
         }
@@ -3638,6 +3931,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -3733,6 +4027,7 @@
             }
           ],
           "default": null,
+          "description": "Server host name, used when ``url`` is not set (one of the two is required).",
           "title": "Host"
         },
         "port": {
@@ -3754,6 +4049,7 @@
             }
           ],
           "default": null,
+          "description": "Server port; the connector's standard port when omitted (for example 5432 for\n``postgres``).",
           "title": "Port"
         },
         "database": {
@@ -3766,6 +4062,7 @@
             }
           ],
           "default": null,
+          "description": "Database name (the service name for ``oracle``).",
           "title": "Database"
         },
         "schema": {
@@ -3791,6 +4088,7 @@
             }
           ],
           "default": null,
+          "description": "Login name.",
           "title": "User"
         },
         "password": {
@@ -3812,6 +4110,7 @@
             }
           ],
           "default": null,
+          "description": "Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Password"
         },
         "driver": {
@@ -3842,6 +4141,7 @@
           "anyOf": [
             {
               "default": "auto",
+              "description": "Where row-level comparisons run: ``auto``, ``pushdown``, ``duckdb``, ``polars``, ``spark``,\nor an engine added by a plugin.",
               "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$",
               "title": "Engine",
               "type": "string"
@@ -3853,7 +4153,8 @@
         },
         "severity": {
           "$ref": "#/$defs/Severity",
-          "default": "error"
+          "default": "error",
+          "description": "Severity of checks that set none."
         },
         "sample_size": {
           "anyOf": [
@@ -3871,23 +4172,32 @@
           ]
         },
         "normalization": {
-          "$ref": "#/$defs/NormalizationConfig"
+          "$ref": "#/$defs/NormalizationConfig",
+          "description": "Canonicalization settings inherited by suites and tables."
         },
         "privacy": {
-          "$ref": "#/$defs/PrivacyConfig"
+          "$ref": "#/$defs/PrivacyConfig",
+          "description": "Masking of personal data in samples, reports, and extracts."
         },
         "execution": {
-          "$ref": "#/$defs/ExecutionConfig"
+          "$ref": "#/$defs/ExecutionConfig",
+          "description": "Concurrency, timeouts, retries, local engine resources, and checkpoints; read from the\nproject-level ``defaults`` only."
         },
         "comparison": {
-          "$ref": "#/$defs/ComparisonConfig"
+          "$ref": "#/$defs/ComparisonConfig",
+          "description": "Source-vs-target comparison settings inherited by suites and tables."
         },
         "schema_checks": {
+          "description": "Schema checks run for comparison tables; single-dataset suites report ``object_exists``\nonly.",
           "items": {
             "$ref": "#/$defs/SchemaCheck"
           },
           "title": "Schema Checks",
           "type": "array"
+        },
+        "schema_options": {
+          "$ref": "#/$defs/SchemaOptionsConfig",
+          "description": "Naming rules (SCH-14) and the drift baseline (SCH-11)."
         }
       },
       "title": "DefaultsConfig",
@@ -3936,6 +4246,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -3991,6 +4302,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -4007,12 +4319,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -4026,6 +4340,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -4170,6 +4506,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -4225,6 +4562,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -4241,12 +4579,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -4260,6 +4600,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Documents sampled; defaults to the dataset's ``options.sample_size`` (1,000).",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -4303,28 +4665,6 @@
           "description": "Expected fields by path (``customer.name``, ``lines[].qty``), each with its allowed\ntypes, minimum presence, and nullability.",
           "title": "Fields",
           "type": "object"
-        },
-        "sample_size": {
-          "anyOf": [
-            {
-              "anyOf": [
-                {
-                  "exclusiveMinimum": 0,
-                  "maximum": 1000000,
-                  "type": "integer"
-                },
-                {
-                  "$ref": "#/$defs/Interpolation"
-                }
-              ]
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Documents sampled; defaults to the dataset's ``options.sample_size`` (1,000).",
-          "title": "Sample Size"
         },
         "sampling": {
           "default": "first",
@@ -4385,6 +4725,54 @@
       "title": "DocumentSchemaCheckConfig",
       "type": "object"
     },
+    "DriftConfig": {
+      "additionalProperties": false,
+      "description": "The baseline of ``schema_drift`` (SCH-11).",
+      "properties": {
+        "baseline": {
+          "default": "previous_run",
+          "description": "``previous_run`` (the schema saved by the last run under the state folder) or the path of\na committed snapshot file (JSON or YAML, relative to the configuration).",
+          "title": "Baseline",
+          "type": "string"
+        },
+        "side": {
+          "default": "both",
+          "description": "Which datasets are compared with their baseline.",
+          "enum": [
+            "source",
+            "target",
+            "both"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "ignore_columns": {
+          "description": "Columns ignored by the comparison (glob patterns, case-insensitive).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Ignore Columns",
+          "type": "array"
+        },
+        "compare": {
+          "description": "What counts as drift: added or removed columns, type changes, nullability changes,\nprimary key changes, and (opt-in) column order changes.",
+          "items": {
+            "enum": [
+              "columns",
+              "types",
+              "nullability",
+              "primary_key",
+              "order"
+            ],
+            "type": "string"
+          },
+          "title": "Compare",
+          "type": "array"
+        }
+      },
+      "title": "DriftConfig",
+      "type": "object"
+    },
     "DstEdgeCasesCheckConfig": {
       "additionalProperties": false,
       "description": "Local timestamps that do not exist (spring forward) or are ambiguous (fall back) in a time zone (MIG-11).",
@@ -4428,6 +4816,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -4483,6 +4872,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -4499,12 +4889,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -4518,6 +4910,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -4539,6 +4953,7 @@
           "title": "Action"
         },
         "columns": {
+          "description": "Columns to check (at least one).",
           "items": {
             "type": "string"
           },
@@ -4560,6 +4975,7 @@
           "title": "Timezone"
         },
         "rules": {
+          "description": "Rules to apply: ``nonexistent`` finds local times skipped when clocks spring forward,\n``ambiguous`` finds local times repeated when they fall back.",
           "items": {
             "enum": [
               "nonexistent",
@@ -4590,6 +5006,7 @@
           "anyOf": [
             {
               "default": 2100,
+              "description": "Latest year whose transitions are examined (sentinel dates are ignored).",
               "maximum": 9999,
               "minimum": 1,
               "title": "Max Year",
@@ -4628,6 +5045,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -4732,6 +5150,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -4875,6 +5294,7 @@
             }
           ],
           "default": null,
+          "description": "Secret access key that goes with ``aws_access_key_id``. Use a ``${secret:...}`` reference; it\nis treated as a secret.",
           "title": "Aws Secret Access Key"
         },
         "aws_session_token": {
@@ -4896,6 +5316,7 @@
             }
           ],
           "default": null,
+          "description": "Session token for temporary credentials. Use a ``${secret:...}`` reference; it is treated as\na secret.",
           "title": "Aws Session Token"
         },
         "page_size": {
@@ -4921,7 +5342,7 @@
     },
     "EmailNotificationConfig": {
       "additionalProperties": false,
-      "description": "Email through SMTP",
+      "description": "Email through SMTP (STARTTLS, implicit TLS, or a plain local relay).",
       "properties": {
         "type": {
           "const": "email",
@@ -4929,8 +5350,31 @@
           "title": "Type",
           "type": "string"
         },
+        "name": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Channel name, used by ``dvf notify test --channel`` and in logs. Defaults to the type, with\n``-2``, ``-3``, ... appended when a type is used more than once.",
+          "title": "Name"
+        },
         "on": {
-          "description": "Run statuses that trigger a notification.",
+          "description": "Run statuses that trigger a notification. An interrupted run counts as ``error``.",
           "items": {
             "$ref": "#/$defs/Status"
           },
@@ -4942,6 +5386,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to stop notifying this channel without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -4952,10 +5397,139 @@
         },
         "options": {
           "additionalProperties": true,
+          "description": "Additional channel-specific settings.",
           "title": "Options",
           "type": "object"
         },
+        "report_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Link to the report shown in messages, for example\n``https://ci.example.com/dvf/${run.id}/report.html``. Without it, messages show the local\nreport path as text.",
+          "title": "Report Url"
+        },
+        "max_failures": {
+          "anyOf": [
+            {
+              "default": 5,
+              "description": "Failed and errored checks listed in a message (the worst first).",
+              "maximum": 50,
+              "minimum": 0,
+              "title": "Max Failures",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "counts_only": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Send statuses, check IDs, and counts only: no messages, hints, or samples. Always the case\nin strict privacy mode (``defaults.privacy.mode: strict``).",
+              "title": "Counts Only",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "include_samples": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Include masked sample rows of the listed failures. Off by default; never in strict privacy\nmode or with ``counts_only``.",
+              "title": "Include Samples",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "max_sample_rows": {
+          "anyOf": [
+            {
+              "default": 3,
+              "description": "Sample rows per failure when ``include_samples`` is on.",
+              "exclusiveMinimum": 0,
+              "maximum": 20,
+              "title": "Max Sample Rows",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "default": 10.0,
+              "description": "Timeout of one delivery attempt, in seconds.",
+              "exclusiveMinimum": 0,
+              "maximum": 300,
+              "title": "Timeout S",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "retries": {
+          "anyOf": [
+            {
+              "default": 2,
+              "description": "Retries after a transient failure (a network error, HTTP 429, or a 5xx response).",
+              "maximum": 10,
+              "minimum": 0,
+              "title": "Retries",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "retry_backoff_s": {
+          "anyOf": [
+            {
+              "default": 1.0,
+              "description": "First retry delay in seconds; it doubles on each retry. A ``Retry-After`` header wins, up\nto 30 seconds.",
+              "maximum": 60,
+              "minimum": 0,
+              "title": "Retry Backoff S",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "ca_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A PEM file of certificate authorities to trust for HTTPS or SMTP TLS (relative to the\nconfiguration), for servers with an internal CA.",
+          "title": "Ca File"
+        },
         "recipients": {
+          "description": "Email addresses the message is sent to.",
           "items": {
             "type": "string"
           },
@@ -4973,9 +5547,11 @@
             }
           ],
           "default": null,
+          "description": "``From`` address; defaults to ``username``, or ``dvf@<host name>``.",
           "title": "Sender"
         },
         "smtp_host": {
+          "description": "SMTP server host name.",
           "title": "Smtp Host",
           "type": "string"
         },
@@ -4983,6 +5559,7 @@
           "anyOf": [
             {
               "default": 587,
+              "description": "SMTP server port. The default suits ``starttls``; implicit TLS (``ssl``) usually uses 465.",
               "maximum": 65535,
               "minimum": 1,
               "title": "Smtp Port",
@@ -5003,6 +5580,7 @@
             }
           ],
           "default": null,
+          "description": "Log in with this user (and ``password``) after the connection is secured.",
           "title": "Username"
         },
         "password": {
@@ -5024,13 +5602,52 @@
             }
           ],
           "default": null,
+          "description": "Password of ``username``, never sent over an unencrypted connection. Use a ``${secret:...}``\nreference; it is treated as a secret.",
           "title": "Password"
         },
         "use_tls": {
           "anyOf": [
             {
               "default": true,
+              "description": "Upgrade the connection with STARTTLS. Kept for compatibility; ``security`` wins when set.",
               "title": "Use Tls",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "security": {
+          "anyOf": [
+            {
+              "enum": [
+                "starttls",
+                "ssl",
+                "none"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "``starttls`` (port 587), ``ssl`` (implicit TLS, port 465), or ``none`` (unencrypted, for\nlocal relays only). Defaults to ``starttls``, or ``none`` when ``use_tls`` is false.",
+          "title": "Security"
+        },
+        "subject_prefix": {
+          "default": "[dvf]",
+          "description": "The subject is ``<prefix> <project>: <STATUS>``.",
+          "title": "Subject Prefix",
+          "type": "string"
+        },
+        "attach_summary": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Attach the Markdown summary (``summary.md``) of the run.",
+              "title": "Attach Summary",
               "type": "boolean"
             },
             {
@@ -5069,6 +5686,7 @@
             }
           ],
           "default": null,
+          "description": "Fewest excluded rows accepted; omit for no lower bound.",
           "title": "Min"
         },
         "max": {
@@ -5089,6 +5707,7 @@
             }
           ],
           "default": null,
+          "description": "Most excluded rows accepted; omit for no upper bound.",
           "title": "Max"
         }
       },
@@ -5131,6 +5750,7 @@
           "anyOf": [
             {
               "default": 1800,
+              "description": "Query timeout in seconds for connections that set no ``query_timeout_s`` of their own.",
               "exclusiveMinimum": 0,
               "title": "Query Timeout S",
               "type": "integer"
@@ -5259,6 +5879,7 @@
         "name": {
           "anyOf": [
             {
+              "description": "Name of the check, required for this type; it becomes part of the check ID.",
               "maxLength": 128,
               "minLength": 1,
               "pattern": "^[A-Za-z0-9_-]+$",
@@ -5280,6 +5901,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -5335,6 +5957,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -5351,12 +5974,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -5370,6 +5995,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -5391,6 +6038,7 @@
           "title": "Action"
         },
         "expression": {
+          "description": "Boolean SQL expression every row must satisfy; rows where it is false or NULL fail.",
           "minLength": 1,
           "title": "Expression",
           "type": "string"
@@ -5412,6 +6060,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "Write extracts for failed checks. Strict privacy mode writes none even when this is on.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -5422,6 +6071,7 @@
         },
         "format": {
           "default": "parquet",
+          "description": "File format of the extract files.",
           "enum": [
             "parquet",
             "csv"
@@ -5433,6 +6083,7 @@
           "anyOf": [
             {
               "default": 100000,
+              "description": "Most failing rows written to one check's extract. Fetched mismatched values are capped by\n``comparison.max_mismatch_rows`` instead.",
               "exclusiveMinimum": 0,
               "title": "Max Rows Per Check",
               "type": "integer"
@@ -5565,6 +6216,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -5620,6 +6272,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -5636,12 +6289,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -5655,6 +6310,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -5690,6 +6367,7 @@
         },
         "algorithm": {
           "default": "sha256",
+          "description": "Digest algorithm. Files are hashed as stored, so a compressed file's digest is that of its\ncompressed bytes.",
           "enum": [
             "md5",
             "sha256"
@@ -5810,6 +6488,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -5865,6 +6544,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -5881,12 +6561,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -5900,6 +6582,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -5951,6 +6655,7 @@
             }
           ],
           "default": null,
+          "description": "Fewest files accepted; omit for no lower bound.",
           "title": "Min"
         },
         "max": {
@@ -5971,6 +6676,7 @@
             }
           ],
           "default": null,
+          "description": "Most files accepted; omit for no upper bound.",
           "title": "Max"
         }
       },
@@ -6023,6 +6729,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -6078,6 +6785,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -6094,12 +6802,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -6113,6 +6823,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -6217,6 +6949,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -6272,6 +7005,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -6288,12 +7022,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -6307,6 +7043,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -6414,6 +7172,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -6469,6 +7228,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -6485,12 +7245,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -6504,6 +7266,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -6656,6 +7440,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -6711,6 +7496,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -6727,12 +7513,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -6746,6 +7534,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -6797,6 +7607,7 @@
             }
           ],
           "default": null,
+          "description": "Smallest accepted file size in bytes; omit for no lower bound.",
           "title": "Min Bytes"
         },
         "max_bytes": {
@@ -6817,6 +7628,7 @@
             }
           ],
           "default": null,
+          "description": "Largest accepted file size in bytes; omit for no upper bound.",
           "title": "Max Bytes"
         },
         "allow_empty": {
@@ -6859,6 +7671,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -6982,6 +7795,7 @@
             }
           ],
           "default": null,
+          "description": "Column holding the flag; it is set when the column holds one of ``values``. Set exactly one\nof ``column`` and ``expression``.",
           "title": "Column"
         },
         "values": {
@@ -7042,6 +7856,7 @@
           "anyOf": [
             {
               "default": 0.0,
+              "description": "Absolute difference accepted between floating-point values; the larger of this and\n``tolerance.numeric_abs`` applies.",
               "minimum": 0,
               "title": "Abs Tol",
               "type": "number"
@@ -7055,6 +7870,7 @@
           "anyOf": [
             {
               "default": 1e-09,
+              "description": "Difference accepted between floating-point values, relative to the larger magnitude.\n``tolerance.numeric_rel`` replaces it when set.",
               "minimum": 0,
               "title": "Rel Tol",
               "type": "number"
@@ -7111,6 +7927,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -7166,6 +7983,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -7182,12 +8000,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -7201,6 +8021,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -7222,12 +8064,14 @@
           "title": "Action"
         },
         "column": {
+          "description": "Column to check.",
           "title": "Column",
           "type": "string"
         },
         "max_age": {
           "anyOf": [
             {
+              "description": "Largest accepted age of the column's newest value when the check runs, such as ``6h`` or\n``1d``.",
               "pattern": "^\\s*\\d+(\\.\\d+)?\\s*(ms|s|m|h|d)\\s*$",
               "title": "Max Age",
               "type": "string"
@@ -7254,6 +8098,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "Record each run in the history store and compare it with the baseline. ``--no-history`` turns\nhistory off for one run.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -7264,6 +8109,7 @@
         },
         "store": {
           "default": "duckdb:///./.dvf/history.duckdb",
+          "description": "History database URL: ``duckdb:///path`` or ``sqlite:///path``. Relative paths are relative\nto the configuration's folder.",
           "title": "Store",
           "type": "string"
         },
@@ -7291,6 +8137,7 @@
             }
           ],
           "default": null,
+          "description": "Keep only this many newest runs (history rows and checkpoint folders); omit to keep every\nrun.",
           "title": "Retention Runs"
         }
       },
@@ -7334,6 +8181,7 @@
             }
           ],
           "default": null,
+          "description": "Table or view name, optionally qualified (``schema.table``). Set exactly one of ``table`` and\n``query``.",
           "title": "Table"
         },
         "query": {
@@ -7346,6 +8194,7 @@
             }
           ],
           "default": null,
+          "description": "SQL query used as the dataset. Set exactly one of ``table`` and ``query``.",
           "title": "Query"
         },
         "filter": {
@@ -7426,6 +8275,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -7481,6 +8331,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -7497,12 +8348,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -7516,6 +8369,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -7574,6 +8449,7 @@
           "title": "Baseline"
         },
         "compare": {
+          "description": "What must be unchanged since the baseline run: the row count, the content checksum, or\nboth.",
           "items": {
             "enum": [
               "row_count",
@@ -7749,6 +8625,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -7804,6 +8681,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -7820,12 +8698,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -7839,6 +8719,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -7886,7 +8788,8 @@
           "title": "Target Where"
         },
         "map": {
-          "$ref": "#/$defs/KeyMapRef"
+          "$ref": "#/$defs/KeyMapRef",
+          "description": "The key map: where it is, and its legacy and new key columns."
         },
         "source_key": {
           "description": "Legacy key columns in the source dataset; defaults to the table's source keys.",
@@ -8001,6 +8904,7 @@
             }
           ],
           "default": null,
+          "description": "Table or view name, optionally qualified (``schema.table``). Set exactly one of ``table`` and\n``query``.",
           "title": "Table"
         },
         "query": {
@@ -8013,6 +8917,7 @@
             }
           ],
           "default": null,
+          "description": "SQL query used as the dataset. Set exactly one of ``table`` and ``query``.",
           "title": "Query"
         },
         "filter": {
@@ -8040,6 +8945,7 @@
               "type": "array"
             }
           ],
+          "description": "Legacy key columns in the map, in the order of ``source_key``.",
           "title": "Legacy Columns"
         },
         "new_columns": {
@@ -8054,6 +8960,7 @@
               "type": "array"
             }
           ],
+          "description": "New key columns in the map, in the order of ``target_key``.",
           "title": "New Columns"
         }
       },
@@ -8069,6 +8976,7 @@
       "description": "A key column, optionally renamed and normalized on the target side.",
       "properties": {
         "source": {
+          "description": "Source key column; also the target column unless ``target`` is set.",
           "title": "Source",
           "type": "string"
         },
@@ -8086,6 +8994,7 @@
           "title": "Target"
         },
         "normalize": {
+          "description": "Normalizers applied to the key on both sides before rows are paired, for example\n``sap_alpha``.",
           "items": {
             "anyOf": [
               {
@@ -8153,6 +9062,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -8208,6 +9118,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -8224,12 +9135,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -8243,6 +9156,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -8416,6 +9351,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -8471,6 +9407,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -8487,12 +9424,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -8506,6 +9445,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -8527,6 +9488,7 @@
           "title": "Action"
         },
         "column": {
+          "description": "Column to check.",
           "title": "Column",
           "type": "string"
         },
@@ -8548,6 +9510,7 @@
             }
           ],
           "default": null,
+          "description": "Shortest accepted length in characters; omit for no lower bound.",
           "title": "Min"
         },
         "max": {
@@ -8568,6 +9531,7 @@
             }
           ],
           "default": null,
+          "description": "Longest accepted length in characters; omit for no upper bound.",
           "title": "Max"
         }
       },
@@ -8576,6 +9540,180 @@
         "column"
       ],
       "title": "LengthCheckConfig",
+      "type": "object"
+    },
+    "LineageConfig": {
+      "additionalProperties": false,
+      "description": "OpenLineage run events with data quality facets (off by default).",
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Send OpenLineage events for each run.",
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "namespace": {
+          "default": "dvf",
+          "description": "Namespace of dvf's jobs.",
+          "minLength": 1,
+          "title": "Namespace",
+          "type": "string"
+        },
+        "job_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Name of the run's job; defaults to the project name.",
+          "title": "Job Name"
+        },
+        "granularity": {
+          "default": "run",
+          "description": "``run``: one job per run, with every dataset as an input. ``table``: also one child job\nper table (``<job_name>.<suite>.<table>``), linked to the run with the parent facet.",
+          "enum": [
+            "run",
+            "table"
+          ],
+          "title": "Granularity",
+          "type": "string"
+        },
+        "transport": {
+          "$ref": "#/$defs/LineageTransportConfig",
+          "description": "Where the events are sent: the console (the default), a file, or an HTTP backend."
+        },
+        "dataset_namespaces": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Dataset namespace per connection name, replacing the one dvf derives from the connection\n(for example ``postgres://db.example.com:5432``).",
+          "title": "Dataset Namespaces",
+          "type": "object"
+        },
+        "fail_on": {
+          "description": "Run statuses sent as ``FAIL`` events; other finished runs are ``COMPLETE`` (the assertions\ncarry the check results) and interrupted runs are ``ABORT``.",
+          "items": {
+            "$ref": "#/$defs/Status"
+          },
+          "title": "Fail On",
+          "type": "array"
+        }
+      },
+      "title": "LineageConfig",
+      "type": "object"
+    },
+    "LineageTransportConfig": {
+      "additionalProperties": false,
+      "description": "Where OpenLineage events are sent.",
+      "properties": {
+        "type": {
+          "default": "console",
+          "description": "``http`` (an OpenLineage backend such as Marquez), ``file`` (JSON Lines), or ``console``\n(standard error, for debugging).",
+          "enum": [
+            "http",
+            "file",
+            "console"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "``http``: the backend's base URL, for example ``http://localhost:5000``.",
+          "title": "Url"
+        },
+        "endpoint": {
+          "default": "api/v1/lineage",
+          "description": "``http``: the path events are posted to, relative to ``url``.",
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "api_key": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "``http``: sent as ``Authorization: Bearer <api_key>``. Use a ``${secret:...}`` reference.",
+          "title": "Api Key"
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "default": 5.0,
+              "description": "``http``: timeout of one request, in seconds.",
+              "exclusiveMinimum": 0,
+              "maximum": 300,
+              "title": "Timeout S",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "retries": {
+          "anyOf": [
+            {
+              "default": 2,
+              "description": "``http``: retries after a network error, HTTP 429, or a 5xx response.",
+              "maximum": 10,
+              "minimum": 0,
+              "title": "Retries",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "``file``: the JSON Lines file events are appended to (relative to the configuration;\n``${run.*}`` placeholders allowed).",
+          "title": "Path"
+        }
+      },
+      "title": "LineageTransportConfig",
       "type": "object"
     },
     "MongodbConnectionConfig": {
@@ -8598,6 +9736,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -8676,6 +9815,7 @@
           ]
         },
         "database": {
+          "description": "Database holding the collections that datasets name.",
           "title": "Database",
           "type": "string"
         },
@@ -8790,6 +9930,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -8885,6 +10026,7 @@
             }
           ],
           "default": null,
+          "description": "Server host name, used when ``url`` is not set (one of the two is required).",
           "title": "Host"
         },
         "port": {
@@ -8906,6 +10048,7 @@
             }
           ],
           "default": null,
+          "description": "Server port; the connector's standard port when omitted (for example 5432 for\n``postgres``).",
           "title": "Port"
         },
         "database": {
@@ -8918,6 +10061,7 @@
             }
           ],
           "default": null,
+          "description": "Database name (the service name for ``oracle``).",
           "title": "Database"
         },
         "schema": {
@@ -8943,6 +10087,7 @@
             }
           ],
           "default": null,
+          "description": "Login name.",
           "title": "User"
         },
         "password": {
@@ -8964,6 +10109,7 @@
             }
           ],
           "default": null,
+          "description": "Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Password"
         },
         "driver": {
@@ -9006,6 +10152,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -9101,6 +10248,7 @@
             }
           ],
           "default": null,
+          "description": "Server host name, used when ``url`` is not set (one of the two is required).",
           "title": "Host"
         },
         "port": {
@@ -9122,6 +10270,7 @@
             }
           ],
           "default": null,
+          "description": "Server port; the connector's standard port when omitted (for example 5432 for\n``postgres``).",
           "title": "Port"
         },
         "database": {
@@ -9134,6 +10283,7 @@
             }
           ],
           "default": null,
+          "description": "Database name (the service name for ``oracle``).",
           "title": "Database"
         },
         "schema": {
@@ -9159,6 +10309,7 @@
             }
           ],
           "default": null,
+          "description": "Login name.",
           "title": "User"
         },
         "password": {
@@ -9180,6 +10331,7 @@
             }
           ],
           "default": null,
+          "description": "Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Password"
         },
         "driver": {
@@ -9202,6 +10354,126 @@
       "title": "MysqlConnectionConfig",
       "type": "object"
     },
+    "NamingConfig": {
+      "additionalProperties": false,
+      "description": "Naming standards checked by ``naming_standards`` (SCH-14).",
+      "properties": {
+        "rules": {
+          "description": "Rules the checked names must follow; without any, ``naming_standards`` is skipped.",
+          "items": {
+            "$ref": "#/$defs/NamingRule"
+          },
+          "title": "Rules",
+          "type": "array"
+        },
+        "side": {
+          "default": "target",
+          "description": "Which dataset's names are checked.",
+          "enum": [
+            "source",
+            "target",
+            "both"
+          ],
+          "title": "Side",
+          "type": "string"
+        }
+      },
+      "title": "NamingConfig",
+      "type": "object"
+    },
+    "NamingRule": {
+      "additionalProperties": false,
+      "description": "A naming standard for table or column names (schema check ``naming_standards``).",
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Label shown in results; defaults to the pattern or preset.",
+          "title": "Name"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Regular expression every name must match in full (Python syntax).",
+          "title": "Pattern"
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "enum": [
+                "snake_case",
+                "upper_snake_case",
+                "camel_case",
+                "pascal_case"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A predefined pattern instead of ``pattern``.",
+          "title": "Preset"
+        },
+        "max_length": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Longest allowed name, in characters.",
+          "title": "Max Length"
+        },
+        "applies_to": {
+          "default": "all",
+          "description": "Which names the rule checks: table names, column names, or ``all``.",
+          "enum": [
+            "tables",
+            "columns",
+            "all"
+          ],
+          "title": "Applies To",
+          "type": "string"
+        },
+        "exclude": {
+          "description": "Names exempt from the rule (glob patterns, case-insensitive).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclude",
+          "type": "array"
+        }
+      },
+      "title": "NamingRule",
+      "type": "object"
+    },
     "NormalizationConfig": {
       "additionalProperties": false,
       "description": "How values are canonicalized before comparison or hashing.",
@@ -9222,6 +10494,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to compare text case-insensitively (both sides are lower-cased).",
               "title": "Case Sensitive",
               "type": "boolean"
             },
@@ -9245,6 +10518,7 @@
         },
         "unicode_form": {
           "default": "NFC",
+          "description": "Unicode normalization applied to text, or ``none``. Databases without a normalization\nfunction compare text without it, and the result says so.",
           "enum": [
             "NFC",
             "NFD",
@@ -9259,6 +10533,7 @@
           "anyOf": [
             {
               "default": false,
+              "description": "Replace each run of whitespace in text with a single space.",
               "title": "Collapse Whitespace",
               "type": "boolean"
             },
@@ -9308,7 +10583,8 @@
           "title": "Decimal Scale"
         },
         "float_compare": {
-          "$ref": "#/$defs/FloatCompare"
+          "$ref": "#/$defs/FloatCompare",
+          "description": "Tolerance for floating-point values, which are compared numerically and never hashed."
         }
       },
       "title": "NormalizationConfig",
@@ -9387,6 +10663,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -9442,6 +10719,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -9458,12 +10736,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -9477,6 +10757,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -9498,6 +10800,7 @@
           "title": "Action"
         },
         "columns": {
+          "description": "Columns to check (at least one).",
           "items": {
             "type": "string"
           },
@@ -9556,6 +10859,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -9611,6 +10915,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -9627,12 +10932,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -9646,6 +10953,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -9667,6 +10996,7 @@
           "title": "Action"
         },
         "columns": {
+          "description": "Columns to check (at least one).",
           "items": {
             "type": "string"
           },
@@ -9725,6 +11055,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -9780,6 +11111,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -9796,12 +11128,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -9815,6 +11149,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -9836,12 +11192,14 @@
           "title": "Action"
         },
         "column": {
+          "description": "Column to check.",
           "title": "Column",
           "type": "string"
         },
         "max_ratio": {
           "anyOf": [
             {
+              "description": "Largest accepted share of NULL values, from 0 to 1 (``0.2`` allows 20 percent).",
               "maximum": 1,
               "minimum": 0,
               "title": "Max Ratio",
@@ -9881,6 +11239,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -9954,6 +11313,7 @@
             }
           ],
           "default": null,
+          "description": "ODBC data source name. Set exactly one of ``dsn`` and ``connection_string``.",
           "title": "Dsn"
         },
         "connection_string": {
@@ -9975,7 +11335,34 @@
             }
           ],
           "default": null,
+          "description": "Full ODBC connection string, treated as a secret because it may contain a password. Set\nexactly one of ``dsn`` and ``connection_string``.",
           "title": "Connection String"
+        },
+        "dialect": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "dvf SQL dialect; detected from the driver's DBMS name when omitted.",
+          "title": "Dialect"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Schema of unqualified table names in catalog lookups (default: the session's).",
+          "title": "Schema"
         }
       },
       "required": [
@@ -10004,6 +11391,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -10099,6 +11487,7 @@
             }
           ],
           "default": null,
+          "description": "Server host name, used when ``url`` is not set (one of the two is required).",
           "title": "Host"
         },
         "port": {
@@ -10120,6 +11509,7 @@
             }
           ],
           "default": null,
+          "description": "Server port; the connector's standard port when omitted (for example 5432 for\n``postgres``).",
           "title": "Port"
         },
         "database": {
@@ -10132,6 +11522,7 @@
             }
           ],
           "default": null,
+          "description": "Database name (the service name for ``oracle``).",
           "title": "Database"
         },
         "schema": {
@@ -10157,6 +11548,7 @@
             }
           ],
           "default": null,
+          "description": "Login name.",
           "title": "User"
         },
         "password": {
@@ -10178,6 +11570,7 @@
             }
           ],
           "default": null,
+          "description": "Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Password"
         },
         "driver": {
@@ -10228,10 +11621,12 @@
           "title": "Connection"
         },
         "table": {
+          "description": "Parent table holding the referenced key, optionally qualified (``schema.table``).",
           "title": "Table",
           "type": "string"
         },
         "columns": {
+          "description": "Key columns of the parent table, paired by position with the check's ``columns``.",
           "items": {
             "type": "string"
           },
@@ -10344,12 +11739,14 @@
             }
           ],
           "default": null,
+          "description": "Named partitions given as a SQL predicate per side; make them cover every row.",
           "title": "Predicates"
         },
         "max_partitions": {
           "anyOf": [
             {
               "default": 1000,
+              "description": "Most partitions allowed, not counting the extra partitions for other values and NULL; more is\nan error.",
               "exclusiveMinimum": 0,
               "maximum": 100000,
               "title": "Max Partitions",
@@ -10371,6 +11768,7 @@
         "name": {
           "anyOf": [
             {
+              "description": "Unique name of the partition: letters, digits, and ``_.=-``.",
               "maxLength": 64,
               "minLength": 1,
               "pattern": "^[A-Za-z0-9_.=-]+$",
@@ -10383,6 +11781,7 @@
           ]
         },
         "source": {
+          "description": "SQL predicate selecting the partition's source rows.",
           "minLength": 1,
           "title": "Source",
           "type": "string"
@@ -10413,6 +11812,7 @@
       "description": "Glob patterns selecting many tables at once; tables are paired by name.",
       "properties": {
         "source": {
+          "description": "Glob pattern (``*``, ``?``) matched case-insensitively against the source connection's table\nnames.",
           "minLength": 1,
           "title": "Source",
           "type": "string"
@@ -10427,6 +11827,7 @@
             }
           ],
           "default": null,
+          "description": "Target table name, with each ``*`` or ``?`` replaced by what it matched in the source name;\ndefaults to the source table's name.",
           "title": "Target"
         }
       },
@@ -10480,6 +11881,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -10575,6 +11977,7 @@
             }
           ],
           "default": null,
+          "description": "Server host name, used when ``url`` is not set (one of the two is required).",
           "title": "Host"
         },
         "port": {
@@ -10596,6 +11999,7 @@
             }
           ],
           "default": null,
+          "description": "Server port; the connector's standard port when omitted (for example 5432 for\n``postgres``).",
           "title": "Port"
         },
         "database": {
@@ -10608,6 +12012,7 @@
             }
           ],
           "default": null,
+          "description": "Database name (the service name for ``oracle``).",
           "title": "Database"
         },
         "schema": {
@@ -10633,6 +12038,7 @@
             }
           ],
           "default": null,
+          "description": "Login name.",
           "title": "User"
         },
         "password": {
@@ -10654,6 +12060,7 @@
             }
           ],
           "default": null,
+          "description": "Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Password"
         },
         "driver": {
@@ -10695,7 +12102,7 @@
         },
         "mode": {
           "default": "standard",
-          "description": "``strict`` keeps every raw value out of reports and extracts.",
+          "description": "``strict`` keeps every raw value out of results, reports, extracts, repro files, and\nnotifications: no samples or extracts, literals removed from recorded SQL, minimum and\nmaximum values hidden.",
           "enum": [
             "standard",
             "strict"
@@ -10710,6 +12117,52 @@
           },
           "title": "Pii Columns",
           "type": "array"
+        },
+        "masking": {
+          "default": "mask",
+          "description": "How protected sample values are written: ``mask`` (``***``, keeping a hint such as\n``j***@example.com``), ``hash`` (keyed HMAC-SHA256 digest, equal values give equal digests),\nor ``tokenize`` (``tok_000042``, consistent within a run).",
+          "enum": [
+            "mask",
+            "hash",
+            "tokenize"
+          ],
+          "title": "Masking",
+          "type": "string"
+        },
+        "detect_patterns": {
+          "anyOf": [
+            {
+              "default": true,
+              "description": "Also protect values that look like email addresses, phone numbers, national IDs, payment\ncard numbers, or IBANs, in any column.",
+              "title": "Detect Patterns",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "hash_key": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Key for ``masking: hash`` (use a ``${secret:...}`` reference). Without it, a random key per\nrun is used, so digests cannot be compared across runs.",
+          "title": "Hash Key"
         }
       },
       "title": "PrivacyConfig",
@@ -10719,6 +12172,7 @@
       "additionalProperties": false,
       "properties": {
         "name": {
+          "description": "Project name, recorded with every run; run history is kept per project.",
           "minLength": 1,
           "title": "Name",
           "type": "string"
@@ -10733,6 +12187,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the project.",
           "title": "Description"
         },
         "owner": {
@@ -10745,6 +12200,7 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the project.",
           "title": "Owner"
         },
         "metadata": {
@@ -10803,6 +12259,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -10858,6 +12315,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -10874,12 +12332,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -10893,6 +12353,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -10914,6 +12396,7 @@
           "title": "Action"
         },
         "column": {
+          "description": "Column to check.",
           "title": "Column",
           "type": "string"
         },
@@ -10947,6 +12430,7 @@
             }
           ],
           "default": null,
+          "description": "Lowest accepted value: a number, or a date or timestamp as an ISO string. Omit for no lower\nbound.",
           "title": "Min"
         },
         "max": {
@@ -10979,12 +12463,14 @@
             }
           ],
           "default": null,
+          "description": "Highest accepted value: a number, or a date or timestamp as an ISO string. Omit for no upper\nbound.",
           "title": "Max"
         },
         "inclusive": {
           "anyOf": [
             {
               "default": true,
+              "description": "Accept values equal to ``min`` or ``max``. Set to false for strict bounds.",
               "title": "Inclusive",
               "type": "boolean"
             },
@@ -11021,6 +12507,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -11116,6 +12603,7 @@
             }
           ],
           "default": null,
+          "description": "Server host name, used when ``url`` is not set (one of the two is required).",
           "title": "Host"
         },
         "port": {
@@ -11137,6 +12625,7 @@
             }
           ],
           "default": null,
+          "description": "Server port; the connector's standard port when omitted (for example 5432 for\n``postgres``).",
           "title": "Port"
         },
         "database": {
@@ -11149,6 +12638,7 @@
             }
           ],
           "default": null,
+          "description": "Database name (the service name for ``oracle``).",
           "title": "Database"
         },
         "schema": {
@@ -11174,6 +12664,7 @@
             }
           ],
           "default": null,
+          "description": "Login name.",
           "title": "User"
         },
         "password": {
@@ -11195,6 +12686,7 @@
             }
           ],
           "default": null,
+          "description": "Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Password"
         },
         "driver": {
@@ -11260,6 +12752,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -11315,6 +12808,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -11331,12 +12825,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -11350,6 +12846,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -11371,6 +12889,7 @@
           "title": "Action"
         },
         "columns": {
+          "description": "Columns of the checked dataset whose values must exist in the parent, paired by position with\n``parent.columns``.",
           "items": {
             "type": "string"
           },
@@ -11391,7 +12910,8 @@
           "title": "Column"
         },
         "parent": {
-          "$ref": "#/$defs/ParentRef"
+          "$ref": "#/$defs/ParentRef",
+          "description": "The parent table and its key columns."
         }
       },
       "required": [
@@ -11444,6 +12964,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -11499,6 +13020,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -11515,12 +13037,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -11534,6 +13058,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -11555,10 +13101,12 @@
           "title": "Action"
         },
         "column": {
+          "description": "Column to check.",
           "title": "Column",
           "type": "string"
         },
         "pattern": {
+          "description": "Regular expression the values must match. It runs in the checked database, so use syntax that\ndatabase supports.",
           "title": "Pattern",
           "type": "string"
         },
@@ -11588,6 +13136,7 @@
       "additionalProperties": false,
       "properties": {
         "formats": {
+          "description": "Report formats, such as ``json``, ``html``, ``junit``, ``markdown``, or ``excel``. ``json``\nis always written, and ``dvf run --format`` replaces this list.",
           "items": {
             "anyOf": [
               {
@@ -11605,14 +13154,17 @@
         },
         "output_dir": {
           "default": "./reports/${run.date}/${run.id}",
+          "description": "Folder for reports and extracts, relative to the configuration. ``${run.*}`` placeholders are\nresolved when the run starts; ``--output-dir`` overrides it.",
           "title": "Output Dir",
           "type": "string"
         },
         "branding": {
-          "$ref": "#/$defs/BrandingConfig"
+          "$ref": "#/$defs/BrandingConfig",
+          "description": "Title, logo, and accent color of the reports."
         },
         "extracts": {
-          "$ref": "#/$defs/ExtractsConfig"
+          "$ref": "#/$defs/ExtractsConfig",
+          "description": "Full mismatch extracts written next to the reports for failed checks."
         },
         "templates_dir": {
           "anyOf": [
@@ -11631,6 +13183,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "List passed checks in the detailed report listings; set to false to list only the other\nchecks.",
               "title": "Include Passed",
               "type": "boolean"
             },
@@ -11643,6 +13196,7 @@
           "anyOf": [
             {
               "default": 50,
+              "description": "Most sample rows shown per check or column in the reports.",
               "minimum": 0,
               "title": "Max Samples Per Check",
               "type": "integer"
@@ -11699,6 +13253,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -11754,6 +13309,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -11770,12 +13326,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -11789,6 +13347,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -11827,6 +13407,7 @@
             }
           ],
           "default": null,
+          "description": "Fewest rows accepted; omit for no lower bound.",
           "title": "Min"
         },
         "max": {
@@ -11847,6 +13428,7 @@
             }
           ],
           "default": null,
+          "description": "Most rows accepted; omit for no upper bound.",
           "title": "Max"
         }
       },
@@ -11858,7 +13440,7 @@
     },
     "SampleConfig": {
       "additionalProperties": false,
-      "description": "Statistical sampling for comparisons too large to run in full.",
+      "description": "Statistical sample comparison (the ``sample`` strategy, REC-07) for tables too large to\ncompare in full.\n\nSize the sample in exactly one way: ``margin_of_error`` (with ``confidence``, by Cochran's\nformula with the finite population correction), ``fraction``, or ``rows``. Rows are chosen\nby a seeded hash of the canonical key, so both sides (in any database) select the same keys.",
       "properties": {
         "fraction": {
           "anyOf": [
@@ -11879,6 +13461,7 @@
             }
           ],
           "default": null,
+          "description": "Share of the keys to compare.",
           "title": "Fraction"
         },
         "rows": {
@@ -11899,12 +13482,66 @@
             }
           ],
           "default": null,
+          "description": "Number of keys to compare (expected; the realized size varies slightly).",
           "title": "Rows"
+        },
+        "margin_of_error": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "exclusiveMaximum": 1,
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Wanted half-width of the confidence interval of the mismatch rate (``0.01`` is plus or\nminus one percentage point); the sample size follows from Cochran's formula.",
+          "title": "Margin Of Error"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "default": 0.95,
+              "description": "Confidence level of the reported interval (and of ``margin_of_error``).",
+              "exclusiveMaximum": 1,
+              "exclusiveMinimum": 0,
+              "title": "Confidence",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "expected_rate": {
+          "anyOf": [
+            {
+              "default": 0.5,
+              "description": "Mismatch rate assumed when sizing by ``margin_of_error``; 0.5 is the most conservative.",
+              "exclusiveMaximum": 1,
+              "exclusiveMinimum": 0,
+              "title": "Expected Rate",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
         },
         "seed": {
           "anyOf": [
             {
               "default": 42,
+              "description": "Changes which keys are sampled; the same seed always selects the same keys.",
               "title": "Seed",
               "type": "integer"
             },
@@ -11914,11 +13551,56 @@
           ]
         },
         "stratify_by": {
+          "description": "Paired columns whose values form strata, each sampled in proportion to its size.",
           "items": {
             "type": "string"
           },
           "title": "Stratify By",
           "type": "array"
+        },
+        "min_per_stratum": {
+          "anyOf": [
+            {
+              "default": 0,
+              "description": "Expected sampled keys per stratum at least (small strata are oversampled and reweighted).",
+              "minimum": 0,
+              "title": "Min Per Stratum",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "max_strata": {
+          "anyOf": [
+            {
+              "default": 1000,
+              "description": "Most strata allowed; more is an error (stratify by fewer or coarser columns).",
+              "exclusiveMinimum": 0,
+              "maximum": 100000,
+              "title": "Max Strata",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "max_mismatch_rate": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "The comparison passes when the estimated mismatch rate is at most this (0: no sampled\nrow may differ).",
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Max Mismatch Rate",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
         }
       },
       "title": "SampleConfig",
@@ -11944,6 +13626,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -12008,6 +13691,7 @@
           "type": "object"
         },
         "host": {
+          "description": "HANA host name.",
           "title": "Host",
           "type": "string"
         },
@@ -12036,6 +13720,7 @@
             }
           ],
           "default": null,
+          "description": "Database user; give it read privileges on the SAP schema only.",
           "title": "User"
         },
         "password": {
@@ -12057,6 +13742,7 @@
             }
           ],
           "default": null,
+          "description": "Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Password"
         },
         "schema": {
@@ -12097,6 +13783,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "Connect with TLS (hdbcli ``encrypt``).",
               "title": "Encrypt",
               "type": "boolean"
             },
@@ -12206,6 +13893,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -12313,6 +14001,7 @@
             }
           ],
           "default": null,
+          "description": "Two-digit instance number of the application server, for direct logon with ``ashost``.",
           "title": "Sysnr"
         },
         "sysid": {
@@ -12390,6 +14079,7 @@
             }
           ],
           "default": null,
+          "description": "SAP user to log on with (HTTP basic authentication for the ``odata`` backend).",
           "title": "User"
         },
         "password": {
@@ -12411,10 +14101,12 @@
             }
           ],
           "default": null,
+          "description": "Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Password"
         },
         "lang": {
           "default": "EN",
+          "description": "Logon language, such as ``EN``; also used for dictionary texts and sent to OData services as\n``sap-language``.",
           "title": "Lang",
           "type": "string"
         },
@@ -12546,6 +14238,7 @@
       "description": "An assertion on a scalar query result.",
       "properties": {
         "operator": {
+          "description": "How the query result is compared with ``value``: ``<result> <operator> <value>``.",
           "enum": [
             "==",
             "!=",
@@ -12560,6 +14253,7 @@
         "value": {
           "anyOf": [
             {
+              "description": "Number the query result is compared with.",
               "title": "Value",
               "type": "number"
             },
@@ -12619,6 +14313,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -12674,6 +14369,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -12690,12 +14386,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -12709,6 +14407,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -12741,13 +14461,16 @@
               "type": "array"
             }
           ],
+          "description": "Business key columns identifying one entity across its versions.",
           "title": "Business Key"
         },
         "valid_from": {
+          "description": "Column holding the start of each version's validity.",
           "title": "Valid From",
           "type": "string"
         },
         "valid_to": {
+          "description": "Column holding the end of each version's validity; NULL, or ``open_end``, marks a version\nthat is still valid.",
           "title": "Valid To",
           "type": "string"
         },
@@ -12826,6 +14549,7 @@
           "anyOf": [
             {
               "default": false,
+              "description": "Do not report gaps between one version's end and the next version's start.",
               "title": "Allow Gaps",
               "type": "boolean"
             },
@@ -12882,6 +14606,7 @@
       "description": "An expected column.",
       "properties": {
         "name": {
+          "description": "Expected column name, compared case-insensitively unless ``case_sensitive`` is set.",
           "minLength": 1,
           "title": "Name",
           "type": "string"
@@ -12949,6 +14674,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -13004,6 +14730,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -13020,12 +14747,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -13039,6 +14768,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -13136,6 +14887,21 @@
       "title": "SchemaOnReadCheckConfig",
       "type": "object"
     },
+    "SchemaOptionsConfig": {
+      "additionalProperties": false,
+      "description": "Settings of the schema checks that need more than the check name.",
+      "properties": {
+        "naming": {
+          "$ref": "#/$defs/NamingConfig"
+        },
+        "drift": {
+          "$ref": "#/$defs/DriftConfig",
+          "description": "The baseline compared by ``schema_drift`` (SCH-11)."
+        }
+      },
+      "title": "SchemaOptionsConfig",
+      "type": "object"
+    },
     "ScopeReconciliationCheckConfig": {
       "additionalProperties": false,
       "description": "Source rows reconcile to migrated rows plus rows excluded by design (MIG-01).",
@@ -13179,6 +14945,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -13234,6 +15001,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -13250,12 +15018,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -13269,6 +15039,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -13447,6 +15239,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to stop writing to this sink without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -13500,12 +15293,14 @@
             }
           ],
           "default": null,
+          "description": "Schema for the result tables, created when missing; the ``sqlite`` sink does not support\nit.",
           "title": "Schema"
         },
         "table_prefix": {
           "anyOf": [
             {
               "default": "dvf_",
+              "description": "Prefix of the result table names: ``<prefix>runs``, ``<prefix>checks``, and\n``<prefix>column_mismatches``.",
               "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
               "title": "Table Prefix",
               "type": "string"
@@ -13517,6 +15312,7 @@
         },
         "options": {
           "additionalProperties": true,
+          "description": "Sink settings: ``batch_size`` (rows per insert, default 1,000) and, for ``postgres``, extra\n``psycopg.connect`` arguments such as ``sslmode``.",
           "title": "Options",
           "type": "object"
         }
@@ -13529,7 +15325,7 @@
     },
     "SlackNotificationConfig": {
       "additionalProperties": false,
-      "description": "Slack webhook",
+      "description": "Slack incoming webhook (Block Kit message).",
       "properties": {
         "type": {
           "const": "slack",
@@ -13537,8 +15333,31 @@
           "title": "Type",
           "type": "string"
         },
+        "name": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Channel name, used by ``dvf notify test --channel`` and in logs. Defaults to the type, with\n``-2``, ``-3``, ... appended when a type is used more than once.",
+          "title": "Name"
+        },
         "on": {
-          "description": "Run statuses that trigger a notification.",
+          "description": "Run statuses that trigger a notification. An interrupted run counts as ``error``.",
           "items": {
             "$ref": "#/$defs/Status"
           },
@@ -13550,6 +15369,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to stop notifying this channel without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -13560,8 +15380,136 @@
         },
         "options": {
           "additionalProperties": true,
+          "description": "Additional channel-specific settings.",
           "title": "Options",
           "type": "object"
+        },
+        "report_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Link to the report shown in messages, for example\n``https://ci.example.com/dvf/${run.id}/report.html``. Without it, messages show the local\nreport path as text.",
+          "title": "Report Url"
+        },
+        "max_failures": {
+          "anyOf": [
+            {
+              "default": 5,
+              "description": "Failed and errored checks listed in a message (the worst first).",
+              "maximum": 50,
+              "minimum": 0,
+              "title": "Max Failures",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "counts_only": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Send statuses, check IDs, and counts only: no messages, hints, or samples. Always the case\nin strict privacy mode (``defaults.privacy.mode: strict``).",
+              "title": "Counts Only",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "include_samples": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Include masked sample rows of the listed failures. Off by default; never in strict privacy\nmode or with ``counts_only``.",
+              "title": "Include Samples",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "max_sample_rows": {
+          "anyOf": [
+            {
+              "default": 3,
+              "description": "Sample rows per failure when ``include_samples`` is on.",
+              "exclusiveMinimum": 0,
+              "maximum": 20,
+              "title": "Max Sample Rows",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "default": 10.0,
+              "description": "Timeout of one delivery attempt, in seconds.",
+              "exclusiveMinimum": 0,
+              "maximum": 300,
+              "title": "Timeout S",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "retries": {
+          "anyOf": [
+            {
+              "default": 2,
+              "description": "Retries after a transient failure (a network error, HTTP 429, or a 5xx response).",
+              "maximum": 10,
+              "minimum": 0,
+              "title": "Retries",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "retry_backoff_s": {
+          "anyOf": [
+            {
+              "default": 1.0,
+              "description": "First retry delay in seconds; it doubles on each retry. A ``Retry-After`` header wins, up\nto 30 seconds.",
+              "maximum": 60,
+              "minimum": 0,
+              "title": "Retry Backoff S",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "ca_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A PEM file of certificate authorities to trust for HTTPS or SMTP TLS (relative to the\nconfiguration), for servers with an internal CA.",
+          "title": "Ca File"
         },
         "webhook": {
           "anyOf": [
@@ -13576,6 +15524,19 @@
               "$ref": "#/$defs/Interpolation"
             }
           ]
+        },
+        "mention": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Text put before the message, for example ``<!here>`` or ``<!subteam^S0123ABC>``.",
+          "title": "Mention"
         }
       },
       "required": [
@@ -13605,6 +15566,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -13669,6 +15631,7 @@
           "type": "object"
         },
         "account": {
+          "description": "Account identifier, such as ``myorg-myaccount``.",
           "title": "Account",
           "type": "string"
         },
@@ -13682,6 +15645,7 @@
             }
           ],
           "default": null,
+          "description": "Login name.",
           "title": "User"
         },
         "password": {
@@ -13703,6 +15667,7 @@
             }
           ],
           "default": null,
+          "description": "Password of ``user``; with ``authenticator: oauth``, the access token when ``options.token``\nis not set. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Password"
         },
         "authenticator": {
@@ -13728,6 +15693,7 @@
             }
           ],
           "default": null,
+          "description": "Private key file for key pair authentication, relative to the configuration's folder. The\nauthenticator then defaults to ``SNOWFLAKE_JWT``.",
           "title": "Private Key Path"
         },
         "private_key_passphrase": {
@@ -13749,6 +15715,7 @@
             }
           ],
           "default": null,
+          "description": "Passphrase of an encrypted private key. Use a ``${secret:...}`` reference; it is treated as a\nsecret.",
           "title": "Private Key Passphrase"
         },
         "warehouse": {
@@ -13761,6 +15728,7 @@
             }
           ],
           "default": null,
+          "description": "Virtual warehouse that runs the queries.",
           "title": "Warehouse"
         },
         "database": {
@@ -13773,6 +15741,7 @@
             }
           ],
           "default": null,
+          "description": "Default database for unqualified table names.",
           "title": "Database"
         },
         "schema": {
@@ -13785,6 +15754,7 @@
             }
           ],
           "default": null,
+          "description": "Default schema for unqualified table names.",
           "title": "Schema"
         },
         "role": {
@@ -13797,6 +15767,7 @@
             }
           ],
           "default": null,
+          "description": "Role of the session. Use one with read-only grants: Snowflake has no read-only session\nmode.",
           "title": "Role"
         }
       },
@@ -13827,6 +15798,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -13983,6 +15955,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -14085,6 +16058,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -14151,6 +16125,7 @@
         "url": {
           "anyOf": [
             {
+              "description": "SQLAlchemy database URL, such as ``dialect+driver://user:password@host/database``. Use a\n``${secret:...}`` reference; it is treated as a secret.",
               "format": "password",
               "title": "Url",
               "type": "string",
@@ -14160,6 +16135,32 @@
               "$ref": "#/$defs/Interpolation"
             }
           ]
+        },
+        "dialect": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "dvf SQL dialect (``postgres``, ``sqlite``, ``mysql``, ``mssql``, ``oracle``, ``duckdb``,\n...); detected from the URL's SQLAlchemy dialect when omitted.",
+          "title": "Dialect"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Schema of unqualified table names in catalog lookups (default: the session's).",
+          "title": "Schema"
         }
       },
       "required": [
@@ -14189,6 +16190,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -14302,6 +16304,7 @@
             }
           ],
           "default": null,
+          "description": "Name used in the result (``rule_<name>``); defaults to the rule's position.",
           "title": "Name"
         },
         "column": {
@@ -14476,6 +16479,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -14531,6 +16535,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -14547,12 +16552,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -14566,6 +16573,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -14613,6 +16642,7 @@
           "title": "Target Where"
         },
         "rules": {
+          "description": "The substitutions to verify.",
           "items": {
             "$ref": "#/$defs/SubstitutionRule"
           },
@@ -14661,6 +16691,7 @@
         "name": {
           "anyOf": [
             {
+              "description": "Suite name, part of every check ID: letters, digits, underscores, and hyphens.",
               "maxLength": 128,
               "minLength": 1,
               "pattern": "^[A-Za-z0-9_-]+$",
@@ -14682,9 +16713,11 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the suite.",
           "title": "Description"
         },
         "tags": {
+          "description": "Labels for selecting with ``dvf run --only tag:NAME``, added to every check result of the\nsuite.",
           "items": {
             "type": "string"
           },
@@ -14701,12 +16734,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the suite; the default owner of its tables' checks.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip every table of this suite.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -14796,6 +16831,7 @@
             }
           ],
           "default": null,
+          "description": "Table name, part of every check ID: letters, digits, underscores, and hyphens. Set exactly\none of ``name`` and ``pattern``.",
           "title": "Name"
         },
         "pattern": {
@@ -14807,7 +16843,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Glob patterns selecting many tables, each validated with this entry's settings. Set exactly\none of ``name`` and ``pattern``."
         },
         "description": {
           "anyOf": [
@@ -14819,9 +16856,11 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the table.",
           "title": "Description"
         },
         "tags": {
+          "description": "Labels for selecting with ``dvf run --only tag:NAME``, added to every check result of the\ntable.",
           "items": {
             "type": "string"
           },
@@ -14838,12 +16877,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the table; the default owner of its checks.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this table.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -14861,7 +16902,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Source dataset (the only one in single-dataset suites). A named table needs one of ``table``,\n``query``, or ``path``; a pattern entry takes its tables from the pattern."
         },
         "target": {
           "anyOf": [
@@ -14872,7 +16914,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Target dataset; required for named tables in comparison suites and not allowed in\nsingle-dataset suites."
         },
         "keys": {
           "anyOf": [
@@ -14901,6 +16944,7 @@
           "anyOf": [
             {
               "default": false,
+              "description": "Use the source dataset's primary key as the keys; ``keys: auto`` sets this. Do not combine it\nwith explicit ``keys``.",
               "title": "Discover Keys",
               "type": "boolean"
             },
@@ -14910,12 +16954,14 @@
           ]
         },
         "columns": {
-          "$ref": "#/$defs/ColumnsConfig"
+          "$ref": "#/$defs/ColumnsConfig",
+          "description": "Which columns to compare and how source and target columns map."
         },
         "engine": {
           "anyOf": [
             {
               "default": "auto",
+              "description": "Where row-level comparisons run; inherited from the suite's defaults when omitted.",
               "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$",
               "title": "Engine",
               "type": "string"
@@ -14927,12 +16973,14 @@
         },
         "severity": {
           "$ref": "#/$defs/Severity",
-          "default": "error"
+          "default": "error",
+          "description": "Severity of checks that set none; inherited from the suite's defaults when omitted."
         },
         "sample_size": {
           "anyOf": [
             {
               "default": 50,
+              "description": "Failing rows captured per check as evidence; inherited from the suite's defaults when\nomitted.",
               "maximum": 10000,
               "minimum": 0,
               "title": "Sample Size",
@@ -14944,17 +16992,24 @@
           ]
         },
         "normalization": {
-          "$ref": "#/$defs/NormalizationConfig"
+          "$ref": "#/$defs/NormalizationConfig",
+          "description": "Canonicalization settings, merged key by key over the suite's defaults."
         },
         "comparison": {
-          "$ref": "#/$defs/ComparisonConfig"
+          "$ref": "#/$defs/ComparisonConfig",
+          "description": "Comparison settings, merged key by key over the suite's defaults."
         },
         "schema_checks": {
+          "description": "Schema checks to run (comparison suites); inherited from the suite's defaults when\nomitted.",
           "items": {
             "$ref": "#/$defs/SchemaCheck"
           },
           "title": "Schema Checks",
           "type": "array"
+        },
+        "schema_options": {
+          "$ref": "#/$defs/SchemaOptionsConfig",
+          "description": "Naming rules (SCH-14) and the drift baseline (SCH-11), merged key by key over the suite's\ndefaults."
         },
         "checks": {
           "items": {
@@ -15115,6 +17170,7 @@
         },
         "details": {
           "additionalProperties": true,
+          "description": "Custom details copied into the table's results (for example requirement IDs).",
           "title": "Details",
           "type": "object"
         },
@@ -15148,7 +17204,7 @@
     },
     "TeamsNotificationConfig": {
       "additionalProperties": false,
-      "description": "Microsoft Teams webhook",
+      "description": "Microsoft Teams Workflows webhook (Adaptive Card); also accepted by legacy connectors.",
       "properties": {
         "type": {
           "const": "teams",
@@ -15156,8 +17212,31 @@
           "title": "Type",
           "type": "string"
         },
+        "name": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Channel name, used by ``dvf notify test --channel`` and in logs. Defaults to the type, with\n``-2``, ``-3``, ... appended when a type is used more than once.",
+          "title": "Name"
+        },
         "on": {
-          "description": "Run statuses that trigger a notification.",
+          "description": "Run statuses that trigger a notification. An interrupted run counts as ``error``.",
           "items": {
             "$ref": "#/$defs/Status"
           },
@@ -15169,6 +17248,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to stop notifying this channel without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -15179,8 +17259,136 @@
         },
         "options": {
           "additionalProperties": true,
+          "description": "Additional channel-specific settings.",
           "title": "Options",
           "type": "object"
+        },
+        "report_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Link to the report shown in messages, for example\n``https://ci.example.com/dvf/${run.id}/report.html``. Without it, messages show the local\nreport path as text.",
+          "title": "Report Url"
+        },
+        "max_failures": {
+          "anyOf": [
+            {
+              "default": 5,
+              "description": "Failed and errored checks listed in a message (the worst first).",
+              "maximum": 50,
+              "minimum": 0,
+              "title": "Max Failures",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "counts_only": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Send statuses, check IDs, and counts only: no messages, hints, or samples. Always the case\nin strict privacy mode (``defaults.privacy.mode: strict``).",
+              "title": "Counts Only",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "include_samples": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Include masked sample rows of the listed failures. Off by default; never in strict privacy\nmode or with ``counts_only``.",
+              "title": "Include Samples",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "max_sample_rows": {
+          "anyOf": [
+            {
+              "default": 3,
+              "description": "Sample rows per failure when ``include_samples`` is on.",
+              "exclusiveMinimum": 0,
+              "maximum": 20,
+              "title": "Max Sample Rows",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "default": 10.0,
+              "description": "Timeout of one delivery attempt, in seconds.",
+              "exclusiveMinimum": 0,
+              "maximum": 300,
+              "title": "Timeout S",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "retries": {
+          "anyOf": [
+            {
+              "default": 2,
+              "description": "Retries after a transient failure (a network error, HTTP 429, or a 5xx response).",
+              "maximum": 10,
+              "minimum": 0,
+              "title": "Retries",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "retry_backoff_s": {
+          "anyOf": [
+            {
+              "default": 1.0,
+              "description": "First retry delay in seconds; it doubles on each retry. A ``Retry-After`` header wins, up\nto 30 seconds.",
+              "maximum": 60,
+              "minimum": 0,
+              "title": "Retry Backoff S",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "ca_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A PEM file of certificate authorities to trust for HTTPS or SMTP TLS (relative to the\nconfiguration), for servers with an internal CA.",
+          "title": "Ca File"
         },
         "webhook": {
           "anyOf": [
@@ -15204,6 +17412,56 @@
       "title": "TeamsNotificationConfig",
       "type": "object"
     },
+    "TelemetryConfig": {
+      "additionalProperties": false,
+      "description": "OpenTelemetry traces and metrics of dvf itself (``dvf-framework[otel]``, off by default).",
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Record OpenTelemetry traces and metrics. Needs ``dvf-framework[otel]``; without it, dvf logs\na warning and records nothing.",
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "exporter": {
+          "default": "global",
+          "description": "``global`` uses the tracer and meter providers configured in the process (for example by\n``opentelemetry-instrument`` from ``OTEL_*`` variables). ``console`` prints spans and metrics\nto standard error, for debugging.",
+          "enum": [
+            "global",
+            "console"
+          ],
+          "title": "Exporter",
+          "type": "string"
+        },
+        "service_name": {
+          "default": "dvf",
+          "description": "``service.name`` of the providers dvf creates for the ``console`` exporter.",
+          "title": "Service Name",
+          "type": "string"
+        },
+        "metrics": {
+          "anyOf": [
+            {
+              "default": true,
+              "description": "Also record metrics (rows per second, query time per side, retries, check counts).",
+              "title": "Metrics",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        }
+      },
+      "title": "TelemetryConfig",
+      "type": "object"
+    },
     "TeradataConnectionConfig": {
       "additionalProperties": false,
       "description": "Teradata Vantage",
@@ -15224,6 +17482,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of the connection.",
           "title": "Description"
         },
         "read_only": {
@@ -15319,6 +17578,7 @@
             }
           ],
           "default": null,
+          "description": "Server host name, used when ``url`` is not set (one of the two is required).",
           "title": "Host"
         },
         "port": {
@@ -15340,6 +17600,7 @@
             }
           ],
           "default": null,
+          "description": "Server port; the connector's standard port when omitted (for example 5432 for\n``postgres``).",
           "title": "Port"
         },
         "database": {
@@ -15352,6 +17613,7 @@
             }
           ],
           "default": null,
+          "description": "Database name (the service name for ``oracle``).",
           "title": "Database"
         },
         "schema": {
@@ -15377,6 +17639,7 @@
             }
           ],
           "default": null,
+          "description": "Login name.",
           "title": "User"
         },
         "password": {
@@ -15398,6 +17661,7 @@
             }
           ],
           "default": null,
+          "description": "Password of ``user``. Use a ``${secret:...}`` reference; it is treated as a secret.",
           "title": "Password"
         },
         "driver": {
@@ -15442,6 +17706,7 @@
             }
           ],
           "default": null,
+          "description": "Accepted absolute difference between numeric values; sums may differ by it once per row.",
           "title": "Numeric Abs"
         },
         "numeric_rel": {
@@ -15462,6 +17727,7 @@
             }
           ],
           "default": null,
+          "description": "Accepted difference between numeric values relative to the larger one, such as ``0.001`` for\n0.1 percent.",
           "title": "Numeric Rel"
         },
         "timestamp": {
@@ -15482,6 +17748,7 @@
             }
           ],
           "default": null,
+          "description": "Accepted difference between dates or timestamps, such as ``1s``.",
           "title": "Timestamp"
         },
         "row_count_pct": {
@@ -15508,6 +17775,57 @@
         }
       },
       "title": "ToleranceConfig",
+      "type": "object"
+    },
+    "TriageConfig": {
+      "additionalProperties": false,
+      "description": "The AI-assisted triage plugin interface (off by default).\n\nWhen enabled, plugins implementing the ``triage_failures`` hook receive masked, aggregated\nsummaries of the run's failures: statuses, counts, and mismatch classes, never values.",
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Opt in to calling triage plugins.",
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "max_checks": {
+          "anyOf": [
+            {
+              "default": 25,
+              "description": "Failed and errored checks included in the summary (the worst first).",
+              "exclusiveMinimum": 0,
+              "maximum": 500,
+              "title": "Max Checks",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "max_columns_per_check": {
+          "anyOf": [
+            {
+              "default": 20,
+              "description": "Column mismatch summaries included per check.",
+              "exclusiveMinimum": 0,
+              "maximum": 500,
+              "title": "Max Columns Per Check",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        }
+      },
+      "title": "TriageConfig",
       "type": "object"
     },
     "UniqueCheckConfig": {
@@ -15553,6 +17871,7 @@
             }
           ],
           "default": null,
+          "description": "Free-text description of what the check verifies.",
           "title": "Description"
         },
         "severity": {
@@ -15608,6 +17927,7 @@
           "title": "Where"
         },
         "tags": {
+          "description": "Labels for selecting checks with ``dvf run --only tag:NAME``. Results carry them together\nwith the table's and the suite's tags.",
           "items": {
             "type": "string"
           },
@@ -15624,12 +17944,14 @@
             }
           ],
           "default": null,
+          "description": "Team or person responsible for the check, reported with its results. Defaults to the table's\nowner, then the suite's.",
           "title": "Owner"
         },
         "enabled": {
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to skip this check without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -15643,6 +17965,28 @@
           "description": "Custom details copied into every result of this check (for example requirement IDs).",
           "title": "Details",
           "type": "object"
+        },
+        "sample_size": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Failing rows this check captures as evidence; ``0`` disables its samples. Defaults to the\ntable's ``sample_size``.",
+          "title": "Sample Size"
         },
         "action": {
           "anyOf": [
@@ -15664,6 +18008,7 @@
           "title": "Action"
         },
         "columns": {
+          "description": "Columns to check (at least one).",
           "items": {
             "type": "string"
           },
@@ -15712,9 +18057,11 @@
             }
           ],
           "default": null,
+          "description": "Waive differences in this column only (glob patterns allowed). A column comparison is waived\nonly when every differing column is waived.",
           "title": "Column"
         },
         "reason": {
+          "description": "Why the difference is accepted; recorded with the waived result.",
           "minLength": 1,
           "title": "Reason",
           "type": "string"
@@ -15729,6 +18076,7 @@
             }
           ],
           "default": null,
+          "description": "Change request or issue reference, such as ``CR-1042``.",
           "title": "Ticket"
         },
         "approved_by": {
@@ -15741,6 +18089,7 @@
             }
           ],
           "default": null,
+          "description": "Who approved the waiver.",
           "title": "Approved By"
         },
         "expires": {
@@ -15774,7 +18123,7 @@
     },
     "WebhookNotificationConfig": {
       "additionalProperties": false,
-      "description": "Generic HTTP webhook",
+      "description": "Generic HTTP webhook: the run summary as JSON (``schema: dvf.notification/v1``).",
       "properties": {
         "type": {
           "const": "webhook",
@@ -15782,8 +18131,31 @@
           "title": "Type",
           "type": "string"
         },
+        "name": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/Interpolation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Channel name, used by ``dvf notify test --channel`` and in logs. Defaults to the type, with\n``-2``, ``-3``, ... appended when a type is used more than once.",
+          "title": "Name"
+        },
         "on": {
-          "description": "Run statuses that trigger a notification.",
+          "description": "Run statuses that trigger a notification. An interrupted run counts as ``error``.",
           "items": {
             "$ref": "#/$defs/Status"
           },
@@ -15795,6 +18167,7 @@
           "anyOf": [
             {
               "default": true,
+              "description": "Set to false to stop notifying this channel without removing it.",
               "title": "Enabled",
               "type": "boolean"
             },
@@ -15805,8 +18178,136 @@
         },
         "options": {
           "additionalProperties": true,
+          "description": "Additional channel-specific settings.",
           "title": "Options",
           "type": "object"
+        },
+        "report_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Link to the report shown in messages, for example\n``https://ci.example.com/dvf/${run.id}/report.html``. Without it, messages show the local\nreport path as text.",
+          "title": "Report Url"
+        },
+        "max_failures": {
+          "anyOf": [
+            {
+              "default": 5,
+              "description": "Failed and errored checks listed in a message (the worst first).",
+              "maximum": 50,
+              "minimum": 0,
+              "title": "Max Failures",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "counts_only": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Send statuses, check IDs, and counts only: no messages, hints, or samples. Always the case\nin strict privacy mode (``defaults.privacy.mode: strict``).",
+              "title": "Counts Only",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "include_samples": {
+          "anyOf": [
+            {
+              "default": false,
+              "description": "Include masked sample rows of the listed failures. Off by default; never in strict privacy\nmode or with ``counts_only``.",
+              "title": "Include Samples",
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "max_sample_rows": {
+          "anyOf": [
+            {
+              "default": 3,
+              "description": "Sample rows per failure when ``include_samples`` is on.",
+              "exclusiveMinimum": 0,
+              "maximum": 20,
+              "title": "Max Sample Rows",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "default": 10.0,
+              "description": "Timeout of one delivery attempt, in seconds.",
+              "exclusiveMinimum": 0,
+              "maximum": 300,
+              "title": "Timeout S",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "retries": {
+          "anyOf": [
+            {
+              "default": 2,
+              "description": "Retries after a transient failure (a network error, HTTP 429, or a 5xx response).",
+              "maximum": 10,
+              "minimum": 0,
+              "title": "Retries",
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "retry_backoff_s": {
+          "anyOf": [
+            {
+              "default": 1.0,
+              "description": "First retry delay in seconds; it doubles on each retry. A ``Retry-After`` header wins, up\nto 30 seconds.",
+              "maximum": 60,
+              "minimum": 0,
+              "title": "Retry Backoff S",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/Interpolation"
+            }
+          ]
+        },
+        "ca_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A PEM file of certificate authorities to trust for HTTPS or SMTP TLS (relative to the\nconfiguration), for servers with an internal CA.",
+          "title": "Ca File"
         },
         "webhook": {
           "anyOf": [
@@ -15821,6 +18322,33 @@
               "$ref": "#/$defs/Interpolation"
             }
           ]
+        },
+        "method": {
+          "default": "POST",
+          "description": "HTTP method used to send the JSON run summary.",
+          "enum": [
+            "POST",
+            "PUT"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "headers": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "$ref": "#/$defs/Interpolation"
+              }
+            ]
+          },
+          "description": "Extra HTTP headers, such as ``Authorization``. Values are treated as secrets.",
+          "title": "Headers",
+          "type": "object"
         }
       },
       "required": [
@@ -15987,6 +18515,7 @@
           "anyOf": [
             {
               "default": false,
+              "description": "Make ``end`` inclusive (``start <= column <= end``).",
               "title": "End Inclusive",
               "type": "boolean"
             },
@@ -16021,7 +18550,8 @@
       ]
     },
     "project": {
-      "$ref": "#/$defs/ProjectConfig"
+      "$ref": "#/$defs/ProjectConfig",
+      "description": "Project name, description, owner, and metadata."
     },
     "vars": {
       "additionalProperties": true,
@@ -16030,7 +18560,8 @@
       "type": "object"
     },
     "defaults": {
-      "$ref": "#/$defs/DefaultsConfig"
+      "$ref": "#/$defs/DefaultsConfig",
+      "description": "Settings inherited by every suite and table."
     },
     "connections": {
       "patternProperties": {
@@ -16155,6 +18686,7 @@
       "type": "array"
     },
     "waivers": {
+      "description": "Accepted, documented differences that do not fail the run until they expire.",
       "items": {
         "$ref": "#/$defs/WaiverConfig"
       },
@@ -16162,7 +18694,8 @@
       "type": "array"
     },
     "reports": {
-      "$ref": "#/$defs/ReportsConfig"
+      "$ref": "#/$defs/ReportsConfig",
+      "description": "Report formats, output folder, branding, and extracts."
     },
     "history": {
       "$ref": "#/$defs/HistoryConfig"
@@ -16204,8 +18737,21 @@
       "title": "Notifications",
       "type": "array"
     },
+    "lineage": {
+      "$ref": "#/$defs/LineageConfig",
+      "description": "OpenLineage run events with data quality facets."
+    },
+    "telemetry": {
+      "$ref": "#/$defs/TelemetryConfig",
+      "description": "OpenTelemetry traces and metrics of dvf itself."
+    },
+    "triage": {
+      "$ref": "#/$defs/TriageConfig",
+      "description": "The AI-assisted triage plugin interface."
+    },
     "plugins": {
-      "$ref": "#/$defs/PluginsConfig"
+      "$ref": "#/$defs/PluginsConfig",
+      "description": "Project-local plugin files and modules; loading them executes their code."
     },
     "extends": {
       "description": "Files merged beneath this one (applied by the loader).",

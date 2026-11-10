@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Phase 4 integrations and the 1.0 release:
+  - Distribution name `dvf-framework` on PyPI (`dvf` is taken). The import package and the `dvf` command are unchanged; install hints use the new name.
+  - Container images on GHCR for linux/amd64 and arm64: `slim` (DuckDB, files, SQLite) and `full` (open-source drivers; SQL Server is left out because its wheel bundles Microsoft's proprietary ODBC driver). Non-root, `dvf` entrypoint, `/work` workdir, built from `uv.lock`, with SBOM, provenance, and attestations.
+  - Automated releases with release-please: PyPI Trusted Publishing with attestations, CycloneDX SBOMs, GitHub Release notes from CHANGELOG.md, multi-arch images, and docs on GitHub Pages. A pip-audit CI job, an OpenSSF Scorecard workflow, and a Docker smoke job. nox sessions `dist`, `quickstart`, `docker`, `sbom`, `audit`, and `release_notes`.
+  - GitHub Action (`action.yml`) that installs `dvf-framework`, runs `dvf run`, publishes the Markdown summary, annotations, and an artifact, sets outputs, and enforces `--fail-on` and `--min-score`. CI templates for GitLab, Azure DevOps, Jenkins, and GitHub Actions with PR (`tag:pr`) and nightly (`tag:nightly`) modes.
+  - `dvf.integrations`: an Airflow `DvfOperator`, Dagster asset checks, a Prefect task and flow, Databricks and AWS Glue entry points, and examples for Azure Data Factory, Synapse, Databricks Workflows, and Step Functions. `dvf dbt import` generates a configuration from a dbt `manifest.json`.
+  - Notifications: Slack (Block Kit), Microsoft Teams Workflows (Adaptive Card), email (SMTP with STARTTLS or TLS), and generic JSON webhooks, triggered by run status, with retries, secret redaction, and privacy filtering; `dvf notify test`; an example ticketing notifier plugin.
+  - OpenLineage run events with data quality assertion and metric facets (HTTP, file, or console transports), OpenTelemetry spans and metrics (`dvf-framework[otel]`), and an AI-assisted triage plugin interface (`triage_failures` hook), off by default, that receives only masked, aggregated summaries.
+  - Secret providers `vault` (verified against HashiCorp Vault) and, as beta, `keyring`, `awssm`, `azurekv`, `gcpsm`, and `databricks`; each secret is resolved once per run and redacted everywhere, including encoded forms.
+  - Privacy: PII pattern detection (emails, phones, national IDs, card numbers, IBANs), masking modes `mask`, `hash`, and `tokenize`, per-check `sample_size`, and strict mode covering recorded SQL, profiles, aggregates, and repro files.
+  - REC-07 `sample` comparison: a seeded-hash sample by key (identical keys on both sides in every dialect), sized by margin of error (Cochran), fraction, or rows, optionally stratified, with an estimated mismatch rate, confidence interval, and extrapolated counts.
+  - Schema checks `physical_design` (SCH-07), `column_order` (SCH-08), `collation` (SCH-09), `object_inventory` (SCH-10), `schema_drift` (SCH-11), and `naming_standards` (SCH-14), with `schema_options` and optional connector catalog-metadata methods.
+  - Result sinks `delta` and, as beta, `snowflake`; generic `sqlalchemy` and `odbc` connectors, verified against SQLite, PostgreSQL, MySQL, and Oracle.
+  - Documentation site restructured for 1.0: reference pages for configuration, components, results, and the command line generated from the models, the registry, and the CLI (`nox -s docs_reference`), a PyPI-first quickstart, installation and releasing guides, two tutorials, and a complete plugin authoring guide. Every configuration field is documented.
+  - Commands `dvf plan`, `dvf schema-diff`, `dvf waivers list`, `dvf config migrate` (a configuration migration framework), and `dvf plugin new` (plugin package scaffolding for seven component kinds).
+  - `dvf.plugins` exports `StagedConnector`, `StagedData`, `NotificationMessage`, and `NotificationError`; notifier plugins implement `Notifier.send`.
+  - ADR 0010 (Phase 4 integrations and the 1.0 release).
+
 - Phase 3 big data and specialized sources:
   - Spark: the `spark` SQL dialect, connector (a running session, local, cluster, or Databricks Connect; catalog tables, Spark SQL, and Parquet, ORC, CSV, JSON, and with packages Avro, Delta, and Iceberg paths, with `as_of` time travel), and engine (the two-phase diff in Spark; other databases' projections are staged as Parquet). `auto` picks Spark when both sides are Spark datasets in one application. The seeded-defect harness passes on Spark, and the canonicalization parity tests run against local Spark in unit CI.
   - In-pipeline validation: `dvf.validate_dataframe(df, checks, on_fail=...)` for pandas, Polars, Arrow, and Spark DataFrames returns the valid rows, the quarantined rows with a `dvf_reasons` column, and the check results. Each check's `action` (`quarantine`, `drop`, `warn`, `fail`) routes failing rows, and `dvf.foreach_batch_validator` handles Structured Streaming micro-batches. Check errors raise `DataValidationError`, so a broken check never lets rows through.
@@ -73,6 +91,13 @@ All notable changes to this project are documented here. The format follows [Kee
   - JSON Schemas for configuration and results in `schemas/`.
   - Architecture document and ADRs 0001 to 0006.
   - CI on Windows, macOS, and Linux with Python 3.11 to 3.14; CodeQL; Dependabot.
+
+### Security
+
+- Basic-auth credentials of the SAP OData backend are no longer sent to other hosts through absolute next links or cross-origin redirects.
+- Strict privacy mode no longer leaks raw key values through recorded SQL literals, profile and aggregate minimums and maximums, or observed values; minimums and maximums of PII-tagged columns are masked in standard mode.
+- Configuration diagnostics no longer echo resolved secrets; `--set` values for password and token settings are redacted in recorded command lines.
+- Run IDs given on the command line are validated, so they cannot traverse paths, and artifact file names can no longer be `.` or `..`.
 
 ### Fixed
 

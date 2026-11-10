@@ -219,8 +219,9 @@ def test_iceberg_catalog_and_staged_scan(tmp_path: Path) -> None:
         assert len(con.list_files(rel)) == 2
         missing = con.resolve(DatasetSpec(table="sales.nothing", options=options))
         assert not con.exists(missing)
+        # An empty sql catalog: without SQLAlchemy it cannot open; with it, the table is missing.
         bad = {"format": "iceberg", "catalog": {"type": "sql", "uri": "sqlite:///:memory:"}}
-        with pytest.raises(ConnectorError, match="Iceberg catalog"):
+        with pytest.raises(ConnectorError, match=r"Iceberg catalog|not found in catalog"):
             _rows(con, DatasetSpec(table="sales.orders", options=bad))
 
 

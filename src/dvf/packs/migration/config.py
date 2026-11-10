@@ -52,7 +52,10 @@ class DatasetLocator(StrictModel):
     connection: Identifier | None = None
     """Connection holding the dataset; defaults to the checked dataset's connection."""
     table: str | None = None
+    """Table or view name, optionally qualified (``schema.table``). Set exactly one of ``table`` and
+    ``query``."""
     query: str | None = None
+    """SQL query used as the dataset. Set exactly one of ``table`` and ``query``."""
     filter: str | None = None
     """SQL predicate applied to this dataset."""
 
@@ -67,6 +70,8 @@ class FlagConfig(StrictModel):
     or a SQL boolean expression."""
 
     column: str | None = None
+    """Column holding the flag; it is set when the column holds one of ``values``. Set exactly one
+    of ``column`` and ``expression``."""
     values: list[FlagValue] = Field(default_factory=lambda: list(_FLAG_SET), min_length=1)
     """Values that mean the flag is set (compared as trimmed, case-insensitive text)."""
     expression: str | None = None
@@ -85,7 +90,9 @@ class ExcludedRange(StrictModel):
     """An accepted range of excluded rows."""
 
     min: NonNegativeInt | None = None
+    """Fewest excluded rows accepted; omit for no lower bound."""
     max: NonNegativeInt | None = None
+    """Most excluded rows accepted; omit for no upper bound."""
 
     @model_validator(mode="after")
     def _bounds(self) -> ExcludedRange:
@@ -133,6 +140,7 @@ class ChangeColumn(StrictModel):
     """A column of the change table's after-image compared with the checked dataset."""
 
     change: str
+    """Column of the change table's after-image."""
     target: str | None = None
     """Column of the checked dataset; defaults to the same name."""
 
@@ -141,6 +149,7 @@ class CdcAppliedCheck(CheckConfig):
     """The latest change of every key in a CDC change table is reflected in the dataset (MIG-02)."""
 
     changes: ChangeTableRef
+    """The CDC change table: where it is, and its key, operation, and sequence columns."""
     key_columns: list[str] = Field(default_factory=list)
     """Key columns of the checked dataset; defaults to the table's keys on that side."""
     insert_values: list[str] = Field(
@@ -148,7 +157,9 @@ class CdcAppliedCheck(CheckConfig):
     )
     """Operation codes of inserts (case-insensitive)."""
     update_values: list[str] = Field(default_factory=lambda: ["u", "update"])
+    """Operation codes of updates (case-insensitive)."""
     delete_values: list[str] = Field(default_factory=lambda: ["d", "delete"])
+    """Operation codes of deletes (case-insensitive)."""
     soft_delete: FlagConfig | None = None
     """How the checked dataset marks deleted rows; deleted keys may then remain, flagged."""
     compare_columns: list[ChangeColumn] = Field(default_factory=list)
@@ -197,6 +208,8 @@ class IdempotencyCheck(CheckConfig):
     baseline: str | None = None
     """Run to compare with: ``last_run`` (default), ``last_passed``, or a run ID."""
     compare: list[IdempotencyMetric] = Field(default_factory=lambda: list(_IDEMPOTENCY_METRICS))
+    """What must be unchanged since the baseline run: the row count, the content checksum, or
+    both."""
 
 
 # ====================================================================== MIG-04
@@ -214,8 +227,12 @@ class Scd2Check(CheckConfig):
     non-overlapping validity ranges, optionally no gaps, and reconciled version counts (MIG-04)."""
 
     business_key: ColumnList = Field(min_length=1)
+    """Business key columns identifying one entity across its versions."""
     valid_from: str
+    """Column holding the start of each version's validity."""
     valid_to: str
+    """Column holding the end of each version's validity; NULL, or ``open_end``, marks a version
+    that is still valid."""
     current_flag: FlagConfig | None = None
     """How current rows are marked. Without it, rows with an open end are current."""
     open_end: datetime | date | str | None = None
@@ -226,6 +243,7 @@ class Scd2Check(CheckConfig):
     granularity: Duration = "1d"
     """For inclusive ends: the step between one version's end and the next one's start."""
     allow_gaps: bool = False
+    """Do not report gaps between one version's end and the next version's start."""
     history: HistoryCountRef | None = None
     """Reconcile the number of versions per business key with this dataset."""
 
@@ -272,7 +290,9 @@ class KeyMapRef(DatasetLocator):
     """A surrogate key map: legacy key columns and the new key columns they map to."""
 
     legacy_columns: ColumnList = Field(min_length=1)
+    """Legacy key columns in the map, in the order of ``source_key``."""
     new_columns: ColumnList = Field(min_length=1)
+    """New key columns in the map, in the order of ``target_key``."""
 
 
 class KeyMapCheck(PairCheckConfig):
@@ -280,6 +300,7 @@ class KeyMapCheck(PairCheckConfig):
     map covers every source and target key (MIG-06)."""
 
     map: KeyMapRef
+    """The key map: where it is, and its legacy and new key columns."""
     source_key: list[str] = Field(default_factory=list)
     """Legacy key columns in the source dataset; defaults to the table's source keys."""
     target_key: list[str] = Field(default_factory=list)
@@ -309,8 +330,13 @@ class AuditColumnsCheck(CheckConfig):
     """Audit and lineage columns are populated and consistent (MIG-07)."""
 
     load_timestamp: str | None = None
+    """Load timestamp column: it must be set, at most ``max_future`` ahead of now, and not before
+    ``not_before``."""
     batch_id: str | None = None
+    """Batch ID column: it must be set, and ``max_batches`` and ``allowed_batches`` may limit its
+    values."""
     source_system: str | None = None
+    """Source system column: it must be set, and ``allowed_source_systems`` may limit its values."""
     not_before: datetime | date | str | None = None
     """Load timestamps must be at or after this (for example the load window start)."""
     max_future: Duration = "5m"
@@ -318,7 +344,10 @@ class AuditColumnsCheck(CheckConfig):
     max_batches: PositiveInt | None = None
     """Most distinct batch IDs (``1``: one batch per load)."""
     allowed_batches: list[str | int] = Field(default_factory=list)
+    """Accepted batch IDs, compared as trimmed, case-insensitive text; needs ``batch_id``."""
     allowed_source_systems: list[str] = Field(default_factory=list)
+    """Accepted source systems, compared as trimmed, case-insensitive text; needs
+    ``source_system``."""
 
     @model_validator(mode="after")
     def _columns(self) -> AuditColumnsCheck:
@@ -396,9 +425,12 @@ class DstEdgeCasesCheck(ColumnsCheckConfig):
     timezone: str | None = None
     """Time zone of the local values; defaults to ``normalization.timezone``."""
     rules: list[DstRule] = Field(default_factory=lambda: list(_DST_RULES), min_length=1)
+    """Rules to apply: ``nonexistent`` finds local times skipped when clocks spring forward,
+    ``ambiguous`` finds local times repeated when they fall back."""
     min_year: int = Field(default=1970, ge=1, le=9999)
     """Earliest year whose transitions are examined (sentinel dates are ignored)."""
     max_year: int = Field(default=2100, ge=1, le=9999)
+    """Latest year whose transitions are examined (sentinel dates are ignored)."""
 
     @field_validator("timezone")
     @classmethod
@@ -419,6 +451,7 @@ class SubstitutionRule(StrictModel):
     """A substitution such as source NULL to target ``'N/A'``, or ``'00000000'`` to NULL."""
 
     name: Identifier | None = None
+    """Name used in the result (``rule_<name>``); defaults to the rule's position."""
     column: str
     """Source column."""
     target_column: str | None = None
@@ -458,6 +491,7 @@ class SubstitutionRulesCheck(PairCheckConfig):
     values do not appear without a matching source condition (MIG-12)."""
 
     rules: list[SubstitutionRule] = Field(min_length=1)
+    """The substitutions to verify."""
     trim: bool = False
     """Compare values after removing leading and trailing spaces."""
     unmatched_sentinels: bool = True
@@ -489,9 +523,12 @@ class BaselineMetricsCheck(CheckConfig):
     metrics: list[BaselineMetric] = Field(
         default_factory=lambda: list(_BASELINE_METRICS), min_length=1
     )
+    """Metrics compared with the baseline; ``groups`` compares the row counts per
+    ``comparison.group_by`` group."""
     columns: list[str] = Field(default_factory=list)
     """Baseline columns to compare (default: every captured column)."""
     tolerance: BaselineTolerance = Field(default_factory=BaselineTolerance)
+    """Accepted differences between the current metrics and the baseline."""
     baseline_table: str | None = None
     """The ``suite.table`` entry of the baseline to compare with (default: this table)."""
 

@@ -1,4 +1,4 @@
-"""Databricks SQL connector (beta; install with ``pip install 'dvf[databricks]'``).
+"""Databricks SQL connector (beta; install with ``pip install 'dvf-framework[databricks]'``).
 
 Implemented from the databricks-sql-connector documentation and tested against a fake driver;
 it has not been verified against a live workspace.

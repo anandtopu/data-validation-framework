@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27", "hatch-vcs>=0.4"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dvf"
+name = "dvf-framework"
 dynamic = ["version"]
 description = "Configuration-driven data and schema validation for data migrations and data engineering."
 readme = "README.md"
@@ -19,11 +19,21 @@ keywords = [
   "schema-validation",
   "data-engineering",
   "etl-testing",
+  "data-reconciliation",
+  "data-testing",
+  "data-contracts",
+  "duckdb",
+  "spark",
+  "sap",
 ]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
   "Intended Audience :: Developers",
   "Intended Audience :: Information Technology",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
@@ -32,6 +42,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Topic :: Database",
+  "Topic :: Scientific/Engineering :: Information Analysis",
   "Topic :: Software Development :: Quality Assurance",
   "Topic :: Software Development :: Testing",
   "Typing :: Typed",
@@ -51,7 +62,6 @@ dependencies = [
   "tzdata>=2024.1; sys_platform == 'win32'",
 ]
 
-# Connector, engine, and format extras are added as their implementations land (Phase 1 onward).
 # Optional engines and connectors. Proprietary drivers are never bundled.
 [project.optional-dependencies]
 polars = [
@@ -115,8 +125,40 @@ cosmos = [
 ]
 # Open-source drivers only. Databricks Connect replaces pyspark, so it is installed separately.
 all = [
-    "dvf[polars,pandas,postgres,mysql,mssql,oracle,snowflake,bigquery,redshift,databricks,excel,spark,delta,iceberg,avro,mongodb,cassandra,dynamodb,cosmos]",
+    "dvf-framework[polars,pandas,postgres,mysql,mssql,oracle,snowflake,bigquery,redshift,databricks,excel,spark,delta,iceberg,avro,mongodb,cassandra,dynamodb,cosmos,sqlalchemy,odbc,otel,azure,aws,gcp,keyring]",
 ]
+otel = [
+    "opentelemetry-api>=1.27",
+    "opentelemetry-sdk>=1.27",
+]
+azure = [
+    "azure-identity>=1.17",
+    "azure-keyvault-secrets>=4.8",
+]
+aws = [
+    "boto3>=1.34",
+]
+gcp = [
+    "google-cloud-secret-manager>=2.20",
+]
+keyring = [
+    "keyring>=25",
+]
+sqlalchemy = [
+    "sqlalchemy>=2.0",
+]
+odbc = [
+    "pyodbc>=5.1",
+]
+
+[project.urls]
+# Replace OWNER/REPOSITORY once the GitHub repository exists (see docs/releasing.md).
+Homepage = "https://github.com/OWNER/REPOSITORY"
+Repository = "https://github.com/OWNER/REPOSITORY"
+Documentation = "https://OWNER.github.io/REPOSITORY/"
+Issues = "https://github.com/OWNER/REPOSITORY/issues"
+Changelog = "https://github.com/OWNER/REPOSITORY/blob/main/CHANGELOG.md"
+Releases = "https://github.com/OWNER/REPOSITORY/releases"
 
 [project.scripts]
 dvf = "dvf.cli.app:main"
@@ -146,6 +188,10 @@ dev = [
   "ruff>=0.6",
   "testcontainers[postgres,mongodb]>=4.8",
   "types-PyYAML>=6.0",
+  "opentelemetry-sdk>=1.27",
+  "keyring>=25",
+  "sqlalchemy>=2.0",
+  "pyodbc>=5.1",
 ]
 docs = [
   "mkdocs-material>=9.5",

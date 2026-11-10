@@ -44,3 +44,8 @@ reports/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Spark's default warehouse folder (created by local Spark sessions)
+spark-warehouse/
+metastore_db/
+derby.log

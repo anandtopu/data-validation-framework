@@ -1,0 +1,116 @@
+{
+  "name": "dvf_validation_container",
+  "properties": {
+    "description": "Runs dvf in an Azure Container Apps job (image ghcr.io/<org>/dvf:latest-full) and fails when the job fails, which it does when dvf exits non-zero (quality gates failed, or an execution or configuration error). The factory's managed identity needs the 'Container Apps Jobs Operator' role (or Contributor) on the job. Example only; not verified against Azure.",
+    "parameters": {
+      "subscriptionId": { "type": "string" },
+      "resourceGroup": { "type": "string" },
+      "jobName": { "type": "string", "defaultValue": "dvf-validation" },
+      "image": { "type": "string", "defaultValue": "ghcr.io/<org>/dvf:latest-full" },
+      "only": { "type": "string", "defaultValue": "tag:nightly" },
+      "minScore": { "type": "string", "defaultValue": "95" }
+    },
+    "variables": {
+      "execution": { "type": "String" },
+      "status": { "type": "String", "defaultValue": "Running" }
+    },
+    "activities": [
+      {
+        "name": "Start dvf",
+        "type": "WebActivity",
+        "policy": { "timeout": "0.00:10:00", "retry": 2, "retryIntervalInSeconds": 60 },
+        "typeProperties": {
+          "method": "POST",
+          "url": "@concat('https://management.azure.com/subscriptions/', pipeline().parameters.subscriptionId, '/resourceGroups/', pipeline().parameters.resourceGroup, '/providers/Microsoft.App/jobs/', pipeline().parameters.jobName, '/start?api-version=2024-03-01')",
+          "headers": { "Content-Type": "application/json" },
+          "body": {
+            "containers": [
+              {
+                "name": "dvf",
+                "image": "@{pipeline().parameters.image}",
+                "command": ["dvf"],
+                "args": [
+                  "run",
+                  "/work/dvf.yaml",
+                  "--only",
+                  "@{pipeline().parameters.only}",
+                  "--min-score",
+                  "@{pipeline().parameters.minScore}",
+                  "--output-dir",
+                  "/work/reports/@{pipeline().RunId}"
+                ],
+                "resources": { "cpu": 2, "memory": "4Gi" }
+              }
+            ]
+          },
+          "authentication": { "type": "MSI", "resource": "https://management.azure.com/" }
+        }
+      },
+      {
+        "name": "Remember the execution",
+        "type": "SetVariable",
+        "dependsOn": [{ "activity": "Start dvf", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "variableName": "execution",
+          "value": "@activity('Start dvf').output.name"
+        }
+      },
+      {
+        "name": "Wait for dvf",
+        "type": "Until",
+        "dependsOn": [{ "activity": "Remember the execution", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(or(equals(variables('status'), 'Running'), equals(variables('status'), 'Processing')))",
+            "type": "Expression"
+          },
+          "timeout": "0.04:00:00",
+          "activities": [
+            {
+              "name": "Pause",
+              "type": "Wait",
+              "typeProperties": { "waitTimeInSeconds": 30 }
+            },
+            {
+              "name": "Get execution",
+              "type": "WebActivity",
+              "dependsOn": [{ "activity": "Pause", "dependencyConditions": ["Succeeded"] }],
+              "typeProperties": {
+                "method": "GET",
+                "url": "@concat('https://management.azure.com/subscriptions/', pipeline().parameters.subscriptionId, '/resourceGroups/', pipeline().parameters.resourceGroup, '/providers/Microsoft.App/jobs/', pipeline().parameters.jobName, '/executions/', variables('execution'), '?api-version=2024-03-01')",
+                "authentication": { "type": "MSI", "resource": "https://management.azure.com/" }
+              }
+            },
+            {
+              "name": "Record status",
+              "type": "SetVariable",
+              "dependsOn": [{ "activity": "Get execution", "dependencyConditions": ["Succeeded"] }],
+              "typeProperties": {
+                "variableName": "status",
+                "value": "@activity('Get execution').output.properties.status"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Gates passed",
+        "type": "IfCondition",
+        "dependsOn": [{ "activity": "Wait for dvf", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "expression": { "value": "@equals(variables('status'), 'Succeeded')", "type": "Expression" },
+          "ifFalseActivities": [
+            {
+              "name": "Fail the pipeline",
+              "type": "Fail",
+              "typeProperties": {
+                "message": "@concat('dvf execution ', variables('execution'), ' ended with status ', variables('status'), '; see the reports in /work/reports/', pipeline().RunId)",
+                "errorCode": "DVF_GATES_FAILED"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

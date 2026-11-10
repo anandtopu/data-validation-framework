@@ -1,0 +1,35 @@
+{
+  "Comment": "Run the dvf Glue job and wait for it; a failed quality gate fails the job, which this state machine reports. Example only; not verified on AWS.",
+  "StartAt": "Run dvf",
+  "States": {
+    "Run dvf": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "dvf-validation",
+        "Arguments": {
+          "--only.$": "$.only",
+          "--min_score.$": "$.min_score"
+        }
+      },
+      "TimeoutSeconds": 14400,
+      "ResultPath": "$.dvf",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "Validation failed"
+        }
+      ],
+      "Next": "Validation passed"
+    },
+    "Validation passed": {
+      "Type": "Succeed"
+    },
+    "Validation failed": {
+      "Type": "Fail",
+      "Error": "DvfValidationFailed",
+      "Cause": "The dvf Glue job failed: quality gates failed or dvf could not run. See the job's logs and the reports in S3."
+    }
+  }
+}

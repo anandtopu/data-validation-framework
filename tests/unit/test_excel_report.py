@@ -378,7 +378,7 @@ def test_excel_requires_openpyxl(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     monkeypatch.setitem(sys.modules, "openpyxl", None)
     with pytest.raises(DependencyError, match="openpyxl") as info:
         ExcelReporter()
-    assert "dvf[excel]" in (info.value.hint or "")
+    assert "dvf-framework[excel]" in (info.value.hint or "")
     with pytest.raises(DependencyError):
         render_excel(build_run(), tmp_path / EXCEL_FILE, ReportOptions())
     assert not (tmp_path / EXCEL_FILE).exists()

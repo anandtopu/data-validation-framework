@@ -1,4 +1,4 @@
-"""Snowflake connector (beta; install with ``pip install 'dvf[snowflake]'``).
+"""Snowflake connector (beta; install with ``pip install 'dvf-framework[snowflake]'``).
 
 Implemented from the snowflake-connector-python documentation and tested against a fake driver;
 it has not been verified against a live account.

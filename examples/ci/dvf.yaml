@@ -1,0 +1,118 @@
+# yaml-language-server: $schema=../../schemas/config.schema.json
+#
+# PR mode and nightly mode, selected by tags. The data is the seeded example in
+# ../local_files (synthetic, with defects on purpose), so both modes report failures.
+#
+#   dvf run dvf.yaml --only tag:pr        # pull requests: counts, control totals, schema, cheap checks
+#   dvf run dvf.yaml --only tag:nightly   # nightly: everything, including row-level comparisons
+#
+# The 'fast' suite is tagged pr and nightly; the 'full' suite only nightly. Selectors match
+# tags on suites, tables, and checks, so a single check can also join PR mode with tags: [pr].
+version: 1
+
+project:
+  name: ci-demo
+  description: PR and nightly modes over the local files example
+
+defaults:
+  engine: duckdb
+  sample_size: 20
+  normalization:
+    timestamp_precision: ms
+
+connections:
+  landing:
+    type: files
+    path: ../local_files/data/landing
+    format: csv
+    options:
+      header: true
+  curated:
+    type: files
+    path: ../local_files/data/curated
+    format: parquet
+
+suites:
+  # Pull requests: no rows leave the databases; counts and control totals are pushed down.
+  - name: fast
+    description: Row counts, control totals, schema, and cheap data quality checks
+    source: landing
+    target: curated
+    tags: [pr, nightly]
+    tables:
+      - name: customers
+        source:
+          path: customers.csv
+          options:
+            types: { customer_code: VARCHAR, balance: "DECIMAL(12,3)" }
+        target: { path: customers.parquet }
+        columns:
+          exclude: [ingested_at]
+          mappings:
+            - { source: email_address, target: email }
+            - { source_expr: "first_name || ' ' || last_name", target: full_name }
+        comparison:
+          strategies: [row_count, aggregate]
+          on_mismatch: null
+        checks:
+          - { type: not_null, columns: [customer_id, email] }
+          - { type: unique, columns: [customer_id] }
+
+      - name: orders
+        source:
+          path: orders.csv
+          options:
+            types: { amount: "DECIMAL(10,2)" }
+        target: { path: orders.parquet }
+        comparison:
+          strategies: [row_count, aggregate]
+          group_by: [order_date]
+          on_mismatch: null
+        checks:
+          - { type: freshness, column: ordered_at, max_age: 2d, severity: warning }
+
+  # Nightly: row-level comparisons with keys, explained with full_diff.
+  - name: full
+    description: Row-level comparisons and referential integrity
+    source: landing
+    target: curated
+    tags: [nightly]
+    tables:
+      - name: customers
+        source:
+          path: customers.csv
+          options:
+            types: { customer_code: VARCHAR, balance: "DECIMAL(12,3)" }
+        target: { path: customers.parquet }
+        keys: [customer_id]
+        columns:
+          exclude: [ingested_at]
+          mappings:
+            - { source: email_address, target: email }
+            - { source_expr: "first_name || ' ' || last_name", target: full_name }
+        schema_checks: []
+        comparison:
+          strategies: [row_hash]
+          on_mismatch: full_diff
+
+      - name: orders
+        source:
+          path: orders.csv
+          options:
+            types: { amount: "DECIMAL(10,2)" }
+        target: { path: orders.parquet }
+        keys: [order_id]
+        schema_checks: []
+        comparison:
+          strategies: [hash_bucket]
+          on_mismatch: full_diff
+        checks:
+          - type: referential_integrity
+            column: customer_id
+            parent: { table: customers.parquet, column: customer_id }
+
+reports:
+  formats: [html, json, junit, markdown]
+  output_dir: ./reports/${run.date}/${run.id}
+  branding:
+    title: CI demo
