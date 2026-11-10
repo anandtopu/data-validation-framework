@@ -56,6 +56,9 @@ def test_wilson_interval() -> None:
     low, high = wilson_interval(0.0, 100, 0.95)
     assert low == 0.0
     assert high == pytest.approx(0.0370, abs=5e-4)
+    low, high = wilson_interval(1.0, 100, 0.95)
+    assert high == 1.0
+    assert low == pytest.approx(1 - 0.0370, abs=5e-4)
     low, high = wilson_interval(0.5, 400, 0.95)
     assert (low, high) == pytest.approx((0.4513, 0.5487), abs=5e-4)
     assert wilson_interval(0.1, 0, 0.95) == (0.0, 1.0)

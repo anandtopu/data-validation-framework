@@ -93,7 +93,11 @@ def wilson_interval(p: float, n_eff: float, confidence: float) -> tuple[float, f
     denominator = 1.0 + z2 / n_eff
     center = (p + z2 / (2.0 * n_eff)) / denominator
     half = (z / denominator) * math.sqrt(max(0.0, p * (1.0 - p) / n_eff + z2 / (4.0 * n_eff**2)))
-    return max(0.0, center - half), min(1.0, center + half)
+    # At p = 0 (or 1) the lower (upper) bound is exactly 0 (1); computed, it can be off by a
+    # rounding error that depends on the platform's math library.
+    low = 0.0 if p <= 0.0 else max(0.0, center - half)
+    high = 1.0 if p >= 1.0 else min(1.0, center + half)
+    return low, high
 
 
 @dataclass
