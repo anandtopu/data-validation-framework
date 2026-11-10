@@ -245,7 +245,9 @@ RAW_VALUES = [
     "Lovelace",
     "Grace Hopper",
     "Dave Black",
-    "7946",
+    # Every phone value, but not a bare "7946": four digits also occur by chance in timings
+    # and hashes in the reports.
+    "20 7946",
 ]
 
 
