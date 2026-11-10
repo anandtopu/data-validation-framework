@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import textwrap
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -93,13 +94,19 @@ def postgres_url() -> Iterator[str]:
             from testcontainers.postgres import PostgresContainer
         except ImportError:  # pragma: no cover - dev dependency
             pytest.skip("testcontainers is not installed and DVF_TEST_POSTGRES_URL is not set")
+        failure: str | None = None
         try:
             container = PostgresContainer("postgres:16-alpine", driver=None)
             container.start()
         except Exception as exc:  # no Docker, or a broken container runtime
+            failure = type(exc).__name__
+        if failure is not None:
+            # A Docker client that could not connect leaves its socket open (macOS runners have
+            # no Docker). Collect it here, where warnings are ignored, instead of at interpreter
+            # exit, where its ResourceWarning would fail the session.
+            gc.collect()
             pytest.skip(
-                f"PostgreSQL container could not start ({type(exc).__name__}); "
-                "set DVF_TEST_POSTGRES_URL"
+                f"PostgreSQL container could not start ({failure}); set DVF_TEST_POSTGRES_URL"
             )
     try:
         yield container.get_connection_url()
