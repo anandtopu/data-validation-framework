@@ -433,3 +433,21 @@ def test_normalizers_work_as_dataframe_expressions(spark: Any) -> None:
     )
     out = df.select(F.expr(expr).alias("c")).toArrow().column("c").to_pylist()
     assert out == ["0042", "STRAẞE"]
+
+
+def test_error_summary_keeps_the_java_cause_of_py4j_errors() -> None:
+    from dvf.connectors.spark import error_summary
+
+    py4j = RuntimeError(
+        "An error occurred while calling o168.createOrReplaceGlobalTempView.\n"
+        ": org.apache.spark.SparkException: Job aborted due to stage failure\n"
+        "\tat org.apache.spark.scheduler.DAGScheduler.failJobAndIndependentStages\n"
+    )
+    assert error_summary(py4j) == (
+        "An error occurred while calling o168.createOrReplaceGlobalTempView. "
+        "org.apache.spark.SparkException: Job aborted due to stage failure"
+    )
+    assert error_summary(RuntimeError("[TABLE_OR_VIEW_NOT_FOUND] x\nmore")) == (
+        "[TABLE_OR_VIEW_NOT_FOUND] x"
+    )
+    assert error_summary(RuntimeError("")) == "RuntimeError"

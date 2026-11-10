@@ -41,6 +41,7 @@ import pyarrow as pa
 from dvf.connectors.spark import (
     SparkConnector,
     engine_session,
+    error_summary,
     global_temp_database,
     is_connect,
     keep_active_session,
@@ -123,7 +124,7 @@ class _SparkDiff:
             rows = int(cached.count())
         except spark_errors() as exc:
             raise ConnectorError(
-                f"Spark could not compute the projection '{view}': {exc}".splitlines()[0]
+                f"Spark could not compute the projection '{view}': {error_summary(exc)}"
             ) from exc
         return self.qualified(view), rows
 

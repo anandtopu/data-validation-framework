@@ -337,9 +337,20 @@ def _hint(exc: BaseException) -> str | None:
     return None
 
 
-def _first_line(exc: BaseException) -> str:
-    text = str(exc).strip()
-    return text.splitlines()[0] if text else type(exc).__name__
+def error_summary(exc: BaseException) -> str:
+    """One line describing a Spark error. A Py4J error's first line only names the JVM call
+    ("An error occurred while calling o168.count."), so the Java exception that follows it
+    (``org.apache...Exception: message``) is added; it is read from the text, which works
+    even when the JVM is gone."""
+    lines = [line.strip() for line in str(exc).splitlines() if line.strip()]
+    if not lines:
+        return type(exc).__name__
+    if lines[0].startswith("An error occurred while calling"):
+        for line in lines[1:]:
+            cause = line.lstrip(":").strip()
+            if line.startswith(":") and cause:
+                return f"{lines[0]} {cause}"
+    return lines[0]
 
 
 def _location(path: str, base_dir: Path) -> str:
@@ -602,7 +613,7 @@ class SparkConnector(Connector):
         except spark_errors() as exc:
             raise ConnectorError(
                 f"Connection '{self.name}' cannot use catalog '{config.catalog}' and schema "
-                f"'{config.schema_}': {_first_line(exc)}",
+                f"'{config.schema_}': {error_summary(exc)}",
                 hint="Check that the catalog and schema exist and that you may use them.",
             ) from exc
 
@@ -668,7 +679,7 @@ class SparkConnector(Connector):
 
     def _fail(self, exc: BaseException) -> ConnectorError:
         return ConnectorError(
-            f"Query failed on connection '{self.name}': {_first_line(exc)}", hint=_hint(exc)
+            f"Query failed on connection '{self.name}': {error_summary(exc)}", hint=_hint(exc)
         )
 
     @contextlib.contextmanager
@@ -731,7 +742,7 @@ class SparkConnector(Connector):
     def _timed_out(self, exc: BaseException) -> ConnectorError:
         return ConnectorError(
             f"Query on connection '{self.name}' was cancelled after "
-            f"{self._config.query_timeout_s} seconds (query_timeout_s): {_first_line(exc)}",
+            f"{self._config.query_timeout_s} seconds (query_timeout_s): {error_summary(exc)}",
             hint="Raise query_timeout_s, or filter the dataset.",
         )
 
