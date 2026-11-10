@@ -12,7 +12,7 @@ Fixes are released as patch versions. The PyPI distribution is `dvf-framework`; 
 
 ## Reporting a vulnerability
 
-Do not open a public issue. Use GitHub's private vulnerability reporting ("Report a vulnerability" on the Security tab) or email `<security-contact@example.org>` (replace before publishing).
+Do not open a public issue. Use GitHub's private vulnerability reporting: [report a vulnerability](https://github.com/anandtopu/data-validation-framework/security/advisories/new), also reachable from the repository's Security tab. Only the maintainers can see the report.
 
 Include the affected version, a description of the issue, and steps to reproduce. Use synthetic data and never send real credentials or personal data. You will receive an acknowledgement within 5 working days and a status update at least every 14 days until the issue is resolved. We coordinate disclosure with you and credit you in the release notes unless you prefer otherwise.
 

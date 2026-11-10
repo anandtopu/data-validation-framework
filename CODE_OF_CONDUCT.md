@@ -6,4 +6,4 @@ In short: be respectful, assume good intent, welcome newcomers, and keep discuss
 
 ## Reporting
 
-Report unacceptable behaviour privately to the maintainers at `<conduct-contact@example.org>` (replace with the project's contact address before publishing). All reports are reviewed promptly and handled confidentially. Maintainers who do not follow the code of conduct may face temporary or permanent consequences as determined by other project leaders.
+Report unacceptable behaviour privately to the maintainer, [@anandtopu](https://github.com/anandtopu): open a [private report](https://github.com/anandtopu/data-validation-framework/security/advisories/new) titled "Code of conduct report", which only the maintainers can see. Content on GitHub can also be reported to GitHub with **Report content**. All reports are reviewed promptly and handled confidentially. Maintainers who do not follow the code of conduct may face temporary or permanent consequences as determined by other project leaders.
