@@ -29,6 +29,14 @@ USER = "dq-bot@example.test"
 PASSWORD = "synthetic-password-0001"
 
 
+@pytest.fixture(autouse=True)
+def _fast_fqdn(monkeypatch: pytest.MonkeyPatch) -> None:
+    """smtplib looks up the client's name with socket.getfqdn() after connecting and before
+    EHLO. On macOS CI runners that reverse lookup can take longer than the test server waits,
+    which then drops the connection; these tests are about dvf, not name resolution."""
+    monkeypatch.setattr(socket, "getfqdn", lambda name="": "localhost")
+
+
 # ---------------------------------------------------------------------- certificates
 
 
