@@ -65,7 +65,7 @@ dependencies = [
 # Optional engines and connectors. Proprietary drivers are never bundled.
 [project.optional-dependencies]
 polars = [
-    "polars>=1.20,<2",
+    "polars>=1.20,<3",
 ]
 postgres = [
     "psycopg[binary]>=3.2",
@@ -175,7 +175,7 @@ dev = [
   "openpyxl>=3.1",
   "oracledb>=2.4",
   "pandas>=2.2",
-  "polars>=1.20,<2",
+  "polars>=1.20,<3",
   "pre-commit>=3.7",
   "psycopg[binary]>=3.2",
   "pyiceberg>=0.9",
