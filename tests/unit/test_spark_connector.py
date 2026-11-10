@@ -435,6 +435,44 @@ def test_normalizers_work_as_dataframe_expressions(spark: Any) -> None:
     assert out == ["0042", "STRAẞE"]
 
 
+def test_local_sessions_pin_python_workers_to_this_interpreter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import os
+    import sys
+
+    from dvf.connectors.spark import pin_python_workers
+
+    monkeypatch.delenv("PYSPARK_PYTHON", raising=False)
+    pin_python_workers()
+    assert os.environ["PYSPARK_PYTHON"] == sys.executable
+
+    monkeypatch.setenv("PYSPARK_PYTHON", "/opt/python/bin/python3.12")
+    pin_python_workers()
+    assert os.environ["PYSPARK_PYTHON"] == "/opt/python/bin/python3.12"
+
+
+def test_windows_sessions_create_their_warehouse_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dvf.connectors.spark import prepare_warehouse
+
+    monkeypatch.chdir(tmp_path)
+    prepare_warehouse({}, windows=True)  # Spark's default, relative to the working folder
+    assert (tmp_path / "spark-warehouse").is_dir()
+
+    prepare_warehouse({"spark.sql.warehouse.dir": str(tmp_path / "a" / "wh")}, windows=True)
+    assert (tmp_path / "a" / "wh").is_dir()
+
+    uri = (tmp_path / "b" / "wh").as_uri()
+    prepare_warehouse({"spark.sql.warehouse.dir": uri}, windows=True)
+    assert (tmp_path / "b" / "wh").is_dir()
+
+    prepare_warehouse({"spark.sql.warehouse.dir": "hdfs://nn/warehouse"}, windows=True)
+    prepare_warehouse({"spark.sql.warehouse.dir": str(tmp_path / "c")}, windows=False)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["a", "b", "spark-warehouse"]
+
+
 def test_error_summary_keeps_the_java_cause_of_py4j_errors() -> None:
     from dvf.connectors.spark import error_summary
 

@@ -202,8 +202,9 @@ df = df.withColumn("customer_code", F.expr(trimmed))
 ## Windows
 
 - Spark reads local files without `winutils.exe`; the "Did not find winutils.exe" warning at startup is harmless. dvf never writes files with Spark (it stages with pyarrow), so Hadoop's native Windows binaries are not needed.
+- The one folder Spark creates by itself is its warehouse (`spark.sql.warehouse.dir`, by default `spark-warehouse` in the working folder), on a session's first catalog access. Hadoop would then set its permissions with `winutils.exe`, so the first query in a new folder would fail. For a local session it starts on Windows, dvf creates that folder first. If you start the session yourself, create the folder before the first query, or set `spark.sql.warehouse.dir` to an existing folder.
 - PySpark turns collected timestamps into Python `datetime` objects with a call that fails before 1970 on Windows; dvf collects timestamps as epoch microseconds instead, so all dates work.
-- dvf does not use Python UDFs, so it does not depend on Spark's Python workers.
+- dvf does not use Python UDFs and sends data to Spark as Arrow, so it does not normally need Spark's Python workers. When something does start them, a local session that dvf starts runs them with dvf's own interpreter (it sets `PYSPARK_PYTHON` unless you did): otherwise PySpark runs `python3` from `PATH`, which on Windows is another installation, because a virtual environment there has no `python3.exe`.
 - When the process exits, Spark may log errors about deleting its temporary folders; they are harmless.
 
 ## Limits

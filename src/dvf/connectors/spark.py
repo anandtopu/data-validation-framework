@@ -29,8 +29,10 @@ import hashlib
 import importlib
 import json
 import logging
+import os
 import re
 import secrets
+import sys
 import threading
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -38,6 +40,8 @@ from datetime import UTC, datetime
 from fnmatch import fnmatchcase
 from pathlib import Path, PureWindowsPath
 from typing import Any
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import pyarrow as pa
 
@@ -157,6 +161,38 @@ def running_session() -> Any | None:
     return session if session is not None and _alive(session) else None
 
 
+def pin_python_workers() -> None:
+    """Run a local session's Python workers with this interpreter.
+
+    PySpark starts its workers with ``PYSPARK_PYTHON``, else ``python3`` from PATH. On Windows a
+    virtual environment has ``python.exe`` but no ``python3.exe``, so the workers would run
+    another installation (another version, without dvf's packages), which fails or hangs. A
+    value the user set is kept."""
+    if not os.environ.get("PYSPARK_PYTHON"):
+        os.environ["PYSPARK_PYTHON"] = sys.executable
+
+
+def prepare_warehouse(settings: dict[str, str], *, windows: bool = os.name == "nt") -> None:
+    """On Windows, create a local session's warehouse folder before Spark does.
+
+    Spark creates it (``spark.sql.warehouse.dir``, by default ``spark-warehouse`` in the working
+    folder) on the session's first catalog access, through Hadoop, which then sets its
+    permissions with ``winutils.exe``. Without Hadoop's Windows binaries that fails the first
+    query in every folder that has no warehouse yet. A folder created here already exists, so
+    Hadoop leaves it alone. Remote locations (``hdfs:``, ``abfss:``, ...) are not touched."""
+    if not windows:
+        return
+    location = settings.get("spark.sql.warehouse.dir") or "spark-warehouse"
+    if location.lower().startswith("file:"):
+        path = Path(url2pathname(urlparse(location).path))
+    elif _SCHEME_RE.match(location) and not PureWindowsPath(location).drive:
+        return
+    else:
+        path = Path(location)
+    with contextlib.suppress(OSError):  # Spark reports a folder it cannot use itself
+        path.mkdir(parents=True, exist_ok=True)
+
+
 def start_session(
     master: str = "local[*]", app_name: str = "dvf", conf: dict[str, str] | None = None
 ) -> Any:
@@ -166,8 +202,11 @@ def start_session(
     settings = dict(SESSION_DEFAULTS)
     if master.startswith("local"):
         settings.update(LOCAL_DEFAULTS)
+        pin_python_workers()
     settings.update(conf or {})
     settings.update(ENFORCED)
+    if master.startswith("local"):
+        prepare_warehouse(settings)
     builder = spark_sql.SparkSession.builder.master(master).appName(app_name)
     for key, value in settings.items():
         builder = builder.config(key, value)

@@ -101,4 +101,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- On Windows, the first Spark query in a folder without a `spark-warehouse` failed with "HADOOP_HOME and hadoop.home.dir are unset", because Spark created the warehouse through Hadoop, which needs `winutils.exe`. dvf now creates the warehouse folder before it starts a local session.
+- Local Spark sessions run their Python workers with dvf's interpreter. On Windows PySpark used `python3` from `PATH`, which is another installation, because a virtual environment there has no `python3.exe`.
+- Spark error messages include the Java exception instead of only "An error occurred while calling ...".
 - The dev dependency group lacked the MySQL, SQL Server, and Oracle drivers, so a unit test that imports `oracledb` failed after a plain `uv sync`.
