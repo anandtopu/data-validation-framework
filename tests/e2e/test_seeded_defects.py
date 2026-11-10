@@ -141,7 +141,16 @@ def _check(dataset: DatasetPairResult, check_type: str) -> CheckResult:
 def assert_exact(result: RunResult, data: SeededData) -> None:
     expected = data.expected
     errors = [c for c in result.iter_checks() if c.status is Status.ERROR]
-    assert not errors, [(c.check_id, c.message, c.error and c.error.traceback) for c in errors]
+    if errors:
+        # pytest.fail, not assert: an assertion message is truncated, and the error's
+        # traceback (with a Spark job's Java cause) is what explains the failure.
+        pytest.fail(
+            "\n\n".join(
+                f"{c.check_id}: {c.message}\n{(c.error and c.error.traceback) or ''}"
+                for c in errors
+            ),
+            pytrace=False,
+        )
 
     customers = _dataset(result, "customers")
     rec = customers.reconciliation
