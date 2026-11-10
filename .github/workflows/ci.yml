@@ -166,7 +166,7 @@ jobs:
           python-version: "3.12"
       - run: uv sync --locked
       - name: Restore the baseline of this runner type
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .benchmarks/baseline.json
           key: benchmark-baseline-${{ runner.os }}-${{ github.sha }}
@@ -175,7 +175,7 @@ jobs:
         run: uv run nox -s benchmark -- ${{ github.ref == 'refs/heads/main' && '--update' || '' }}
       - name: Save the new baseline (main only)
         if: github.ref == 'refs/heads/main'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .benchmarks/baseline.json
           key: benchmark-baseline-${{ runner.os }}-${{ github.sha }}
