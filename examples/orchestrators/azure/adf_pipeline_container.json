@@ -1,12 +1,12 @@
 {
   "name": "dvf_validation_container",
   "properties": {
-    "description": "Runs dvf in an Azure Container Apps job (image ghcr.io/<org>/dvf:latest-full) and fails when the job fails, which it does when dvf exits non-zero (quality gates failed, or an execution or configuration error). The factory's managed identity needs the 'Container Apps Jobs Operator' role (or Contributor) on the job. Example only; not verified against Azure.",
+    "description": "Runs dvf in an Azure Container Apps job (image ghcr.io/anandtopu/dvf:latest-full) and fails when the job fails, which it does when dvf exits non-zero (quality gates failed, or an execution or configuration error). The factory's managed identity needs the 'Container Apps Jobs Operator' role (or Contributor) on the job. Example only; not verified against Azure.",
     "parameters": {
       "subscriptionId": { "type": "string" },
       "resourceGroup": { "type": "string" },
       "jobName": { "type": "string", "defaultValue": "dvf-validation" },
-      "image": { "type": "string", "defaultValue": "ghcr.io/<org>/dvf:latest-full" },
+      "image": { "type": "string", "defaultValue": "ghcr.io/anandtopu/dvf:latest-full" },
       "only": { "type": "string", "defaultValue": "tag:nightly" },
       "minScore": { "type": "string", "defaultValue": "95" }
     },

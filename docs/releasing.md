@@ -19,8 +19,8 @@ The release workflow runs these jobs for a release tag:
 
 1. **Build**: `uv build` makes the sdist and wheel from the tag. `twine check --strict` validates their metadata and README, the built version must equal the tag, the wheel is installed in a clean environment and runs the seeded example, and `nox -s sbom` writes CycloneDX SBOMs from `uv.lock`.
 2. **PyPI**: a GitHub build provenance attestation is created for the sdist and wheel, then they are uploaded with Trusted Publishing, which also uploads PEP 740 attestations.
-3. **Images**, in parallel with PyPI: the slim and full images are built for `linux/amd64` and `linux/arm64`, pushed to `ghcr.io/OWNER/dvf`, given BuildKit SBOM and provenance attestations and a GitHub build provenance attestation, then pulled back and smoke-tested.
-4. **GitHub Release**: the notes are set from the version's `CHANGELOG.md` section, and the distributions and SBOMs are attached.
+3. **Images**, in parallel with PyPI: the slim and full images are built for `linux/amd64` and `linux/arm64`, pushed to `ghcr.io/anandtopu/dvf`, given BuildKit SBOM and provenance attestations and a GitHub build provenance attestation, then pulled back and smoke-tested.
+4. **GitHub Release**: the notes are set from the version's `CHANGELOG.md` section, and the distributions and SBOMs are attached. For the newest final release of a major version, the major tag (`v1`) is moved to it, so `uses: anandtopu/data-validation-framework@v1` gets the newest 1.x GitHub Action.
 5. **Docs**: the site is built from the tag and deployed (final releases only).
 
 Each job has only the permissions it needs; the workflow default is none. Release builds never restore caches. Every third-party action is pinned to a commit SHA, with its version in a comment for Dependabot.
@@ -102,7 +102,7 @@ The images are pushed with the workflow's `GITHUB_TOKEN` (`packages: write`); no
 
 - **Settings → Pages → Build and deployment → Source**: GitHub Actions.
 - The `github-pages` environment accepts deployments from the default branch only. For releases from tags pushed by hand, add the tag pattern `v*` under **Settings → Environments → github-pages → Deployment branches and tags**.
-- The site is published at `https://OWNER.github.io/REPOSITORY/`. Set it as the repository's website, and as `site_url` in `mkdocs.yml`.
+- The site is published at <https://anandtopu.github.io/data-validation-framework/>, which is also the repository's website and `site_url` in `mkdocs.yml`.
 
 ### Scorecard
 
@@ -114,23 +114,23 @@ Anyone can check that a distribution or image was built by this repository's rel
 
 ```bash
 # The sdist and wheel, downloaded from PyPI or the GitHub Release
-gh attestation verify dvf_framework-1.0.0-py3-none-any.whl --repo OWNER/REPOSITORY
+gh attestation verify dvf_framework-1.0.0-py3-none-any.whl --repo anandtopu/data-validation-framework
 
 # A container image
-gh attestation verify oci://ghcr.io/OWNER/dvf:1.0.0 --repo OWNER/REPOSITORY
+gh attestation verify oci://ghcr.io/anandtopu/dvf:1.0.0 --repo anandtopu/data-validation-framework
 ```
 
 PyPI shows each file's PEP 740 attestation under **Provenance** on the file's page, and the `pypi-attestations` tool verifies it:
 
 ```bash
-uvx pypi-attestations verify pypi --repository https://github.com/OWNER/REPOSITORY pypi:dvf_framework-1.0.0-py3-none-any.whl
+uvx pypi-attestations verify pypi --repository https://github.com/anandtopu/data-validation-framework pypi:dvf_framework-1.0.0-py3-none-any.whl
 ```
 
 The BuildKit SBOM (SPDX) and SLSA provenance stored with each image:
 
 ```bash
-docker buildx imagetools inspect ghcr.io/OWNER/dvf:1.0.0 --format "{{ json .SBOM }}"
-docker buildx imagetools inspect ghcr.io/OWNER/dvf:1.0.0 --format "{{ json .Provenance }}"
+docker buildx imagetools inspect ghcr.io/anandtopu/dvf:1.0.0 --format "{{ json .SBOM }}"
+docker buildx imagetools inspect ghcr.io/anandtopu/dvf:1.0.0 --format "{{ json .Provenance }}"
 ```
 
 The CycloneDX SBOMs attached to the GitHub Release describe the locked Python dependencies: `dvf-framework-X.Y.Z.cdx.json` the runtime dependencies, and `dvf-framework-X.Y.Z-all-extras.cdx.json` with every extra. `uv run nox -s sbom` writes the same files locally.
@@ -143,8 +143,8 @@ When a release is broken, publish a fixed patch release, then withdraw the broke
 2. **Images**: point the moving tags back at a good version, for example:
 
    ```bash
-   docker buildx imagetools create -t ghcr.io/OWNER/dvf:latest ghcr.io/OWNER/dvf:1.0.1
-   docker buildx imagetools create -t ghcr.io/OWNER/dvf:latest-full ghcr.io/OWNER/dvf:1.0.1-full
+   docker buildx imagetools create -t ghcr.io/anandtopu/dvf:latest ghcr.io/anandtopu/dvf:1.0.1
+   docker buildx imagetools create -t ghcr.io/anandtopu/dvf:latest-full ghcr.io/anandtopu/dvf:1.0.1-full
    ```
 
    Keep the broken version's tags, so deployments that pinned it can still be inspected, unless it is a security problem.

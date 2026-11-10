@@ -1,7 +1,7 @@
 # dvf GitHub Action: run a dvf configuration, publish the Markdown summary and reports, and
 # fail the step by the quality gates. Documented in docs/ci.md.
 #
-#   - uses: <owner>/dvf@v1
+#   - uses: anandtopu/data-validation-framework@v1
 #     with:
 #       config: dvf.yaml
 #       only: tag:pr

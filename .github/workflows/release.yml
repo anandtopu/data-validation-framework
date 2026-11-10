@@ -357,6 +357,31 @@ jobs:
             gh release create "$TAG" --verify-tag --title "$TAG" "${notes_flags[@]}" "${prerelease_flag[@]}"
           fi
           gh release upload "$TAG" dist/* sbom/* --clobber
+      - name: Point the major version tag at this release (uses ...@v1 for the GitHub Action)
+        if: needs.prepare.outputs.prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          major="${TAG%%.*}"
+          # Only the newest final release of a major version moves it, so a patch to an older
+          # minor version never moves v1 backwards.
+          newest="$(gh api --paginate "repos/$GH_REPO/tags" --jq '.[].name' \
+            | grep -E "^${major}\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)"
+          if [ "$newest" != "$TAG" ]; then
+            echo "$TAG is not the newest $major release ($newest); leaving $major unchanged"
+            exit 0
+          fi
+          sha="$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)"
+          if gh api "repos/$GH_REPO/git/ref/tags/$major" > /dev/null 2>&1; then
+            gh api --method PATCH "repos/$GH_REPO/git/refs/tags/$major" \
+              -f sha="$sha" -F force=true > /dev/null
+          else
+            gh api --method POST "repos/$GH_REPO/git/refs" \
+              -f ref="refs/tags/$major" -f sha="$sha" > /dev/null
+          fi
+          echo "$major now points at $TAG ($sha)"
 
   docs:
     name: Documentation

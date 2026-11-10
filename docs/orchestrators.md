@@ -132,7 +132,7 @@ Install `dvf-framework` on the job cluster (a PyPI library) without the `spark` 
 
 Two pipeline definitions are in `examples/orchestrators/azure/`:
 
-- **Container** (`adf_pipeline_container.json`): a Web activity starts an Azure Container Apps job running the dvf image (`ghcr.io/<org>/dvf:latest-full`) with `dvf run` arguments, an Until loop polls the execution, and a Fail activity fails the pipeline unless it succeeded. dvf exits non-zero when the gates fail, so the execution fails. Mount the project (configuration and any files) at `/work`, for example from an Azure Files share, and give the factory's managed identity the Container Apps Jobs Operator role (or Contributor) on the job.
+- **Container** (`adf_pipeline_container.json`): a Web activity starts an Azure Container Apps job running the dvf image (`ghcr.io/anandtopu/dvf:latest-full`) with `dvf run` arguments, an Until loop polls the execution, and a Fail activity fails the pipeline unless it succeeded. dvf exits non-zero when the gates fail, so the execution fails. Mount the project (configuration and any files) at `/work`, for example from an Azure Files share, and give the factory's managed identity the Container Apps Jobs Operator role (or Contributor) on the job.
 - **Databricks** (`adf_pipeline_databricks.json`): a Databricks Notebook activity runs `dvf_notebook.py` with `raise_on_failure=false`, and an If Condition reads `runOutput.passed` and fails the pipeline with the quality score in the message.
 
 Synapse pipelines use the same activity types. Fabric data pipelines can run dvf with a Notebook activity (`%pip install dvf-framework` in the notebook, then `run_notebook`); Fabric's pipeline JSON is not provided.

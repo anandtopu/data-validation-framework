@@ -1,5 +1,9 @@
 site_name: dvf - Data Validation Framework
 site_description: Configuration-driven data and schema validation for data migrations and data engineering
+site_url: https://anandtopu.github.io/data-validation-framework/
+repo_url: https://github.com/anandtopu/data-validation-framework
+repo_name: anandtopu/data-validation-framework
+edit_uri: edit/main/docs/
 strict: true
 
 theme:

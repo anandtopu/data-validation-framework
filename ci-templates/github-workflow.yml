@@ -1,7 +1,6 @@
 # dvf data validation with the dvf GitHub Action. Documented in docs/ci.md.
 #
-# Copy this file to .github/workflows/dvf.yml and replace <owner>/dvf with the repository
-# that publishes the action. It runs:
+# Copy this file to .github/workflows/dvf.yml. It runs:
 #
 #   PR mode       on pull requests: fast checks selected by tag:pr
 #   nightly mode  on the schedule below: full comparisons selected by tag:nightly
@@ -51,7 +50,7 @@ jobs:
 
       - name: Validate
         id: dvf
-        uses: <owner>/dvf@v1
+        uses: anandtopu/data-validation-framework@v1
         with:
           config: dvf.yaml
           only: tag:${{ env.DVF_MODE }}

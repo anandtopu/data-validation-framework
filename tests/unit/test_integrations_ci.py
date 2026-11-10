@@ -161,7 +161,7 @@ def test_github_workflow_template() -> None:
     workflow = load_yaml(TEMPLATES / "github-workflow.yml")
     assert {"pull_request", "schedule", "workflow_dispatch"} <= set(triggers(workflow))
     steps = workflow["jobs"]["dvf"]["steps"]
-    action = next(s for s in steps if str(s.get("uses", "")).endswith("/dvf@v1"))
+    action = next(s for s in steps if s.get("uses") == "anandtopu/data-validation-framework@v1")
     assert action["with"]["only"] == "tag:${{ env.DVF_MODE }}"
     assert "nightly" in workflow["jobs"]["dvf"]["env"]["DVF_MODE"]
     assert any("junit" in str(s.get("with", {})) for s in steps)

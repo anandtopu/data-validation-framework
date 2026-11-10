@@ -4,10 +4,10 @@ Two images are published to the GitHub Container Registry for every release, for
 
 | Image | Tags | Contents |
 |---|---|---|
-| `ghcr.io/OWNER/dvf` | `1.2.3`, `1.2`, `1`, `latest` | Slim: the core package. DuckDB, SQLite, and CSV, TSV, Parquet, JSON, and NDJSON files. |
-| `ghcr.io/OWNER/dvf` | `1.2.3-full`, `1.2-full`, `1-full`, `latest-full` | Full: the slim image plus the open-source drivers and formats: PostgreSQL, MySQL, Oracle (thin mode), MongoDB, SQLAlchemy, ODBC (unixODBC without a driver), Polars, Excel, Delta Lake, Iceberg, and Avro. |
+| `ghcr.io/anandtopu/dvf` | `1.2.3`, `1.2`, `1`, `latest` | Slim: the core package. DuckDB, SQLite, and CSV, TSV, Parquet, JSON, and NDJSON files. |
+| `ghcr.io/anandtopu/dvf` | `1.2.3-full`, `1.2-full`, `1-full`, `latest-full` | Full: the slim image plus the open-source drivers and formats: PostgreSQL, MySQL, Oracle (thin mode), MongoDB, SQLAlchemy, ODBC (unixODBC without a driver), Polars, Excel, Delta Lake, Iceberg, and Avro. |
 
-`OWNER` is the GitHub account or organization that hosts the repository. Pre-releases are tagged with their exact version only.
+Pre-releases are tagged with their exact version only.
 
 Both images:
 
@@ -17,26 +17,26 @@ Both images:
 - install their Python packages from `uv.lock`, so an image matches the lockfile of the commit it was built from;
 - stop cleanly on `docker stop`: the stop signal is `SIGINT`, which dvf turns into an interrupted run with checkpoints and exit code 2, ready for `dvf run --resume`.
 
-Release images carry OCI labels and annotations (version, source commit, license), a BuildKit SBOM and SLSA provenance in the registry, and a GitHub build provenance attestation (`gh attestation verify oci://ghcr.io/OWNER/dvf:1.2.3 --owner OWNER`).
+Release images carry OCI labels and annotations (version, source commit, license), a BuildKit SBOM and SLSA provenance in the registry, and a GitHub build provenance attestation (`gh attestation verify oci://ghcr.io/anandtopu/dvf:1.2.3 --owner anandtopu`).
 
 ## Run a project
 
 Mount the folder that holds `dvf.yaml` at `/work`:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/OWNER/dvf:latest run dvf.yaml
+docker run --rm -v "$PWD:/work" ghcr.io/anandtopu/dvf:latest run dvf.yaml
 ```
 
 On Linux, add `--user "$(id -u):$(id -g)"` so the reports written to the mounted folder belong to you. Docker Desktop on Windows and macOS does not need it.
 
 ```powershell
-docker run --rm -v "${PWD}:/work" ghcr.io/OWNER/dvf:latest run dvf.yaml
+docker run --rm -v "${PWD}:/work" ghcr.io/anandtopu/dvf:latest run dvf.yaml
 ```
 
 Pass credentials as environment variables and reference them in the configuration with `${secret:env:NAME}`:
 
 ```bash
-docker run --rm -v "$PWD:/work" -e PG_PASSWORD ghcr.io/OWNER/dvf:latest-full run dvf.yaml
+docker run --rm -v "$PWD:/work" -e PG_PASSWORD ghcr.io/anandtopu/dvf:latest-full run dvf.yaml
 ```
 
 To reach a database on the Docker host, use `--network host` on Linux, or `host.docker.internal` as the host name on Docker Desktop.
@@ -46,7 +46,7 @@ To reach a database on the Docker host, use `--network host` on Linux, or `host.
 Proprietary drivers are never included. Build your own image on top of the full one and install them there, for example the SAP HANA client:
 
 ```dockerfile
-FROM ghcr.io/OWNER/dvf:1.2.3-full
+FROM ghcr.io/anandtopu/dvf:1.2.3-full
 COPY --from=ghcr.io/astral-sh/uv:0.12.18 /uv /usr/local/bin/uv
 USER root
 RUN uv pip install --python /opt/dvf/bin/python --no-cache hdbcli

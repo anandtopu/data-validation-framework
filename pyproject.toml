@@ -152,13 +152,12 @@ odbc = [
 ]
 
 [project.urls]
-# Replace OWNER/REPOSITORY once the GitHub repository exists (see docs/releasing.md).
-Homepage = "https://github.com/OWNER/REPOSITORY"
-Repository = "https://github.com/OWNER/REPOSITORY"
-Documentation = "https://OWNER.github.io/REPOSITORY/"
-Issues = "https://github.com/OWNER/REPOSITORY/issues"
-Changelog = "https://github.com/OWNER/REPOSITORY/blob/main/CHANGELOG.md"
-Releases = "https://github.com/OWNER/REPOSITORY/releases"
+Homepage = "https://github.com/anandtopu/data-validation-framework"
+Repository = "https://github.com/anandtopu/data-validation-framework"
+Documentation = "https://anandtopu.github.io/data-validation-framework/"
+Issues = "https://github.com/anandtopu/data-validation-framework/issues"
+Changelog = "https://github.com/anandtopu/data-validation-framework/blob/main/CHANGELOG.md"
+Releases = "https://github.com/anandtopu/data-validation-framework/releases"
 
 [project.scripts]
 dvf = "dvf.cli.app:main"

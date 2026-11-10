@@ -70,7 +70,7 @@ Every run writes `results.json` and, as requested with `--format`, `junit.xml` (
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: <owner>/dvf@v1
+- uses: anandtopu/data-validation-framework@v1
   id: dvf
   with:
     config: dvf.yaml
@@ -82,7 +82,7 @@ Every run writes `results.json` and, as requested with `--format`, `junit.xml` (
     WAREHOUSE_PASSWORD: ${{ secrets.WAREHOUSE_PASSWORD }}
 ```
 
-Replace `<owner>/dvf` with the repository that publishes the action. The action:
+`@v1` follows the newest 1.x release; pin a release tag (`@v1.0.0`) or a commit SHA when runs must be reproducible. The action:
 
 1. sets up Python (`python-version`, default 3.12) and installs `dvf-framework` with the `extras` into a virtual environment, with uv (default) or pip;
 2. runs `dvf run` with the inputs below, always adding `--output-dir` and, for the job summary, `--format markdown`;

@@ -2,12 +2,11 @@
 
 **Configuration-driven data and schema validation for data migrations and data engineering.**
 
-<!-- Replace OWNER/REPOSITORY once the GitHub repository exists (see docs/releasing.md). -->
-[![CI](https://github.com/OWNER/REPOSITORY/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/OWNER/REPOSITORY/actions/workflows/ci.yml)
+[![CI](https://github.com/anandtopu/data-validation-framework/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/anandtopu/data-validation-framework/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/dvf-framework)](https://pypi.org/project/dvf-framework/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![Docs](https://github.com/OWNER/REPOSITORY/actions/workflows/docs.yml/badge.svg)](https://OWNER.github.io/REPOSITORY/)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/OWNER/REPOSITORY/badge)](https://scorecard.dev/viewer/?uri=github.com/OWNER/REPOSITORY)
+[![Docs](https://github.com/anandtopu/data-validation-framework/actions/workflows/docs.yml/badge.svg)](https://anandtopu.github.io/data-validation-framework/)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/anandtopu/data-validation-framework/badge)](https://scorecard.dev/viewer/?uri=github.com/anandtopu/data-validation-framework)
 
 `dvf` validates schemas and data quality, reconciles source and target datasets at scale, and produces detailed, auditable reports. It is built for migration projects (SAP, on-premise databases to cloud warehouses, SQL to NoSQL) and for data engineering pipelines (PySpark, Databricks, Parquet, Avro, JSON, CSV).
 
@@ -73,7 +72,7 @@ dvf init demo --example
 dvf run demo/dvf.yaml
 ```
 
-Add extras for your systems, for example `pip install 'dvf-framework[postgres,mssql]'`, or use the container images (`ghcr.io/OWNER/dvf:latest`, slim, and `ghcr.io/OWNER/dvf:latest-full`); see [docs/installation.md](docs/installation.md). From a source checkout, run `uv sync` and prefix the commands with `uv run`.
+Add extras for your systems, for example `pip install 'dvf-framework[postgres,mssql]'`, or use the container images (`ghcr.io/anandtopu/dvf:latest`, slim, and `ghcr.io/anandtopu/dvf:latest-full`); see [docs/installation.md](docs/installation.md). From a source checkout, run `uv sync` and prefix the commands with `uv run`.
 
 The run finds the seeded defects (exit code 1) and writes `report.html`, `results.json`, `junit.xml`, and `summary.md` under `demo/reports/`. Each mismatched column is classified, for example as `whitespace_only`, `numeric_rounding`, or `timezone_shift`, with a suggested fix.
 

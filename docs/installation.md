@@ -56,22 +56,22 @@ pipx upgrade dvf-framework
 
 ### Docker
 
-Two images are published to the GitHub Container Registry for `linux/amd64` and `linux/arm64`. `OWNER` below is the GitHub account that hosts the repository.
+Two images are published to the GitHub Container Registry for `linux/amd64` and `linux/arm64`.
 
 | Image | Contents |
 |---|---|
-| `ghcr.io/OWNER/dvf:latest` (or a version, `ghcr.io/OWNER/dvf:1.2.3`) | Slim: DuckDB, SQLite, and CSV, TSV, Parquet, JSON, and NDJSON files |
-| `ghcr.io/OWNER/dvf:latest-full` (or `ghcr.io/OWNER/dvf:1.2.3-full`) | Full: adds PostgreSQL, MySQL, Oracle, MongoDB, SQLAlchemy, ODBC (without a driver), Polars, Excel, Delta Lake, Iceberg, and Avro. SQL Server is left out because its driver bundles Microsoft's proprietary ODBC driver; build your own image with it ([docker/README.md](https://github.com/OWNER/REPOSITORY/blob/main/docker/README.md)) |
+| `ghcr.io/anandtopu/dvf:latest` (or a version, `ghcr.io/anandtopu/dvf:1.2.3`) | Slim: DuckDB, SQLite, and CSV, TSV, Parquet, JSON, and NDJSON files |
+| `ghcr.io/anandtopu/dvf:latest-full` (or `ghcr.io/anandtopu/dvf:1.2.3-full`) | Full: adds PostgreSQL, MySQL, Oracle, MongoDB, SQLAlchemy, ODBC (without a driver), Polars, Excel, Delta Lake, Iceberg, and Avro. SQL Server is left out because its driver bundles Microsoft's proprietary ODBC driver; build your own image with it ([docker/README.md](https://github.com/anandtopu/data-validation-framework/blob/main/docker/README.md)) |
 
 The entrypoint is `dvf` and the working directory is `/work`, so mount your project there:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/OWNER/dvf:latest init demo --example
-docker run --rm -v "$PWD:/work" ghcr.io/OWNER/dvf:latest run demo/dvf.yaml
+docker run --rm -v "$PWD:/work" ghcr.io/anandtopu/dvf:latest init demo --example
+docker run --rm -v "$PWD:/work" ghcr.io/anandtopu/dvf:latest run demo/dvf.yaml
 ```
 
 ```powershell
-docker run --rm -v "${PWD}:/work" ghcr.io/OWNER/dvf:latest run demo/dvf.yaml
+docker run --rm -v "${PWD}:/work" ghcr.io/anandtopu/dvf:latest run demo/dvf.yaml
 ```
 
 The images run as a non-root user (UID 10001). On Linux, add `--user "$(id -u):$(id -g)"` so the reports written to your folder belong to you. Pass credentials with `-e NAME` and reference them as `${secret:env:NAME}`. Proprietary drivers are not included; `docker/README.md` in the repository shows how to add one in your own image, how to build the images yourself, and how to verify their provenance.
@@ -174,6 +174,6 @@ The run finds the seeded defects, exits with code 1 on purpose, and writes `repo
 | pip | `pip install --upgrade dvf-framework` | `pip uninstall dvf-framework` |
 | uv tool | `uv tool upgrade dvf-framework` | `uv tool uninstall dvf-framework` |
 | pipx | `pipx upgrade dvf-framework` | `pipx uninstall dvf-framework` |
-| Docker | `docker pull ghcr.io/OWNER/dvf:latest` | `docker rmi ghcr.io/OWNER/dvf:latest` |
+| Docker | `docker pull ghcr.io/anandtopu/dvf:latest` | `docker rmi ghcr.io/anandtopu/dvf:latest` |
 
 dvf follows Semantic Versioning: configuration files and the results schema stay compatible within a major version, and deprecations warn for at least one minor release before anything is removed.
